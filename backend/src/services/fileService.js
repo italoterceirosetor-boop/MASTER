@@ -4,30 +4,19 @@ import path from 'path';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
+import { readZip, readRar, readXML } from './archiveService.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const SUPPORTED_TYPES = [
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/jpg',
-  'image/webp',
-  'image/gif',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
-  'application/vnd.ms-excel', // xls
-  'text/csv',
-  'text/plain',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document' // docx
+const SUPPORTED_EXTENSIONS = [
+  '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif',
+  '.xlsx', '.xls', '.csv', '.txt', '.docx',
+  '.xml', '.zip', '.rar'
 ];
 
-const SUPPORTED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.xlsx', '.xls', '.csv', '.txt', '.docx'];
-
-// Extrai texto de um arquivo baseado no tipo
 export async function extractFileContent(filePath, mimetype, originalName) {
   const ext = path.extname(originalName).toLowerCase();
 
   try {
-    // PDF
     if (ext === '.pdf' || mimetype === 'application/pdf') {
       const buffer = await fs.readFile(filePath);
       const data = await pdfParse(buffer);
@@ -39,7 +28,6 @@ export async function extractFileContent(filePath, mimetype, originalName) {
       };
     }
 
-    // Excel (xlsx, xls)
     if (['.xlsx', '.xls'].includes(ext)) {
       const buffer = await fs.readFile(filePath);
       const workbook = XLSX.read(buffer);
@@ -57,38 +45,38 @@ export async function extractFileContent(filePath, mimetype, originalName) {
       };
     }
 
-    // CSV
     if (ext === '.csv' || mimetype === 'text/csv') {
       const text = await fs.readFile(filePath, 'utf-8');
-      return {
-        type: 'csv',
-        text,
-        name: originalName
-      };
+      return { type: 'csv', text, name: originalName };
     }
 
-    // TXT
     if (ext === '.txt' || mimetype === 'text/plain') {
       const text = await fs.readFile(filePath, 'utf-8');
-      return {
-        type: 'text',
-        text,
-        name: originalName
-      };
+      return { type: 'text', text, name: originalName };
     }
 
-    // Word (docx)
     if (ext === '.docx') {
       const buffer = await fs.readFile(filePath);
       const result = await mammoth.extractRawText({ buffer });
-      return {
-        type: 'docx',
-        text: result.value,
-        name: originalName
-      };
+      return { type: 'docx', text: result.value, name: originalName };
     }
 
-    // Imagens — não extrai texto, mas marca pra IA ver
+    // XML (NFe, NFSe, etc)
+    if (ext === '.xml' || mimetype === 'application/xml' || mimetype === 'text/xml') {
+      return await readXML(filePath, originalName);
+    }
+
+    // ZIP
+    if (ext === '.zip') {
+      return await readZip(filePath);
+    }
+
+    // RAR
+    if (ext === '.rar') {
+      return await readRar(filePath);
+    }
+
+    // Imagens
     if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
       return {
         type: 'image',
@@ -104,22 +92,17 @@ export async function extractFileContent(filePath, mimetype, originalName) {
   }
 }
 
-// Valida o arquivo
 export function validateFile(file) {
   const ext = path.extname(file.originalname).toLowerCase();
-
   if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-    throw new Error(`Tipo não suportado: ${ext}. Use: PDF, imagens, Excel, CSV, TXT ou DOCX`);
+    throw new Error(`Tipo não suportado: ${ext}. Use: PDF, imagens, Excel, CSV, TXT, DOCX, XML, ZIP ou RAR`);
   }
-
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)}MB. Máximo: 10MB`);
   }
-
   return true;
 }
 
-// Formata conteúdo dos arquivos pra enviar pra IA
 export function formatFilesForAI(files) {
   if (!files || files.length === 0) return '';
 
@@ -130,9 +113,8 @@ export function formatFilesForAI(files) {
     context += `Tipo: ${file.type}\n`;
 
     if (file.isImage) {
-      context += `(Esta é uma imagem. Descreva o que vê se relevante.)\n`;
+      context += `(Esta é uma imagem.)\n`;
     } else {
-      // Limita tamanho do texto pra não estourar tokens
       const maxChars = 15000;
       const text = file.text.length > maxChars
         ? file.text.substring(0, maxChars) + '\n\n[... texto truncado ...]'
