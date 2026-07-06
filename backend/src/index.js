@@ -4,12 +4,15 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import chatRoutes from './routes/chat.js';
 import conversationsRoutes from './routes/conversations.js';
+import uploadRoutes from './routes/upload.js';
 import { initDatabase } from './db/init.js';
 
 dotenv.config();
 
 const app = express();
+// Railway passa PORT via env, mas queremos garantir que bate com o configurado
 const PORT = process.env.PORT || 3001;
+console.log(`🔧 Iniciando na porta ${PORT}`);
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
@@ -21,6 +24,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/conversations', conversationsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
