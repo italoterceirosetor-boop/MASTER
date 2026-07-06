@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Logo from './components/Logo';
 import MarkdownMessage from './components/MarkdownMessage';
+import FileUpload from './components/FileUpload';
 import { api } from './lib/api';
 
 export default function Chat({ user, onLogout }) {
@@ -9,6 +10,7 @@ export default function Chat({ user, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [conversationId, setConversationId] = useState(null);
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -59,19 +61,51 @@ export default function Chat({ user, onLogout }) {
 
   async function sendMessage(e) {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if ((!input.trim() && attachedFiles.length === 0) || loading) return;
 
-    const userMessage = input.trim();
+    const userMessage = input.trim() || 'Analise os arquivos anexados.';
     setInput('');
+    const filesToSend = attachedFiles;
+    setAttachedFiles([]);
 
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    // Mostra mensagem do usuário com info dos arquivos
+    const displayMessage = userMessage + (filesToSend.length > 0
+      ? `\n\n📎 ${filesToSend.length} arquivo(s) anexado(s)`
+      : '');
+    setMessages(prev => [...prev, { role: 'user', content: displayMessage }]);
     setLoading(true);
 
     try {
-      const data = await api('/api/chat', {
-        method: 'POST',
-        body: JSON.stringify({ conversationId, message: userMessage })
-      });
+      let data;
+
+      if (filesToSend.length > 0) {
+        // Envia com arquivos via FormData
+        const formData = new FormData();
+        formData.append('message', userMessage);
+        if (conversationId) formData.append('conversationId', conversationId);
+        filesToSend.forEach(file => formData.append('files', file));
+
+        const token = localStorage.getItem('master_token');
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_URL}/api/upload/chat`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ error: 'Erro no upload' }));
+          throw new Error(err.error);
+        }
+
+        data = await response.json();
+      } else {
+        // Mensagem normal sem arquivos
+        data = await api('/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({ conversationId, message: userMessage })
+        });
+      }
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
 
@@ -197,16 +231,21 @@ export default function Chat({ user, onLogout }) {
         </div>
 
         <form onSubmit={sendMessage} className="input-form">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte algo ao Master IA..."
-            disabled={loading}
-          />
-          <button type="submit" disabled={loading || !input.trim()}>
-            {loading ? '...' : '➤'}
-          </button>
+          <FileUpload files={attachedFiles} setFiles={setAttachedFiles} disabled={loading} />
+          <div className="input-form-row">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={attachedFiles.length > 0
+                ? "Adicione um comentário sobre os arquivos (opcional)..."
+                : "Pergunte algo ao Master IA..."}
+              disabled={loading}
+            />
+            <button type="submit" disabled={loading || (!input.trim() && attachedFiles.length === 0)}>
+              {loading ? '...' : '➤'}
+            </button>
+          </div>
         </form>
       </main>
     </div>
