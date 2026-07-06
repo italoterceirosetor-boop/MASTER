@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Logo from './components/Logo';
 import MarkdownMessage from './components/MarkdownMessage';
-import FileUpload from './components/FileUpload';
+import FileUpload, { FilePreviews } from './components/FileUpload';
 import { api } from './lib/api';
 
 export default function Chat({ user, onLogout }) {
@@ -231,15 +231,16 @@ export default function Chat({ user, onLogout }) {
         </div>
 
         <form onSubmit={sendMessage} className="input-form">
-          <FileUpload files={attachedFiles} setFiles={setAttachedFiles} disabled={loading} />
+          <FilePreviews files={attachedFiles} setFiles={setAttachedFiles} disabled={loading} />
           <div className="input-form-row">
+            <FileUpload files={attachedFiles} setFiles={setAttachedFiles} disabled={loading} />
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={attachedFiles.length > 0
                 ? "Adicione um comentário sobre os arquivos (opcional)..."
-                : "Pergunte algo ao Master IA..."}
+                : "Pergunte algo ao Master IA... (Ctrl+V para colar print)"}
               disabled={loading}
             />
             <button type="submit" disabled={loading || (!input.trim() && attachedFiles.length === 0)}>
