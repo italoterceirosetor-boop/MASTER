@@ -3,6 +3,7 @@ import express from 'express';
 import { pool } from '../db/pool.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { chatWithAI } from '../services/chatService.js';
+import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT } from '../services/generatorService.js';
 
 const router = express.Router();
 
@@ -25,7 +26,6 @@ router.post('/', authMiddleware, async (req, res) => {
       );
       convId = newConv.rows[0].id;
     } else {
-      // Verifica se a conversa é do usuário
       const check = await pool.query(
         'SELECT id FROM conversations WHERE id = $1 AND user_id = $2',
         [convId, userId]
@@ -41,7 +41,7 @@ router.post('/', authMiddleware, async (req, res) => {
       [convId, 'user', message]
     );
 
-    // Busca histórico da conversa
+    // Busca histórico
     const history = await pool.query(
       'SELECT role, content FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
       [convId]
@@ -52,18 +52,63 @@ router.post('/', authMiddleware, async (req, res) => {
     // Chama IA
     const aiResponse = await chatWithAI(messages, message);
 
-    // Salva resposta da IA
+    // Detecta marcadores de geração de arquivos
+    const { cleanText, markers } = parseGenerationMarkers(aiResponse);
+
+    // Gera os arquivos (se houver)
+    const generatedFiles = [];
+    for (const marker of markers) {
+      try {
+        let buffer;
+        const filename = `${marker.filename}.${marker.type}`;
+        let mimeType;
+
+        if (marker.type === 'pdf') {
+          buffer = await generatePDF({ title: marker.filename, content: marker.content });
+          mimeType = 'application/pdf';
+        } else if (marker.type === 'docx') {
+          buffer = await generateDOCX({ title: marker.filename, content: marker.content });
+          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else if (marker.type === 'xlsx') {
+          buffer = await generateXLSX({ title: marker.filename, content: marker.content });
+          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (marker.type === 'txt') {
+          buffer = generateTXT({ title: marker.filename, content: marker.content });
+          mimeType = 'text/plain';
+        }
+
+        if (buffer) {
+          // Salva no banco
+          const fileResult = await pool.query(
+            `INSERT INTO generated_files (conversation_id, filename, mime_type, content)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [convId, filename, mimeType, buffer]
+          );
+
+          generatedFiles.push({
+            id: fileResult.rows[0].id,
+            filename,
+            mimeType,
+            size: buffer.length
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao gerar arquivo:', err);
+      }
+    }
+
+    // Salva resposta (sem os marcadores)
     await pool.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-      [convId, 'assistant', aiResponse]
+      [convId, 'assistant', cleanText]
     );
 
-    // Atualiza timestamp da conversa
     await pool.query('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [convId]);
 
     res.json({
       conversationId: convId,
-      message: aiResponse
+      message: cleanText,
+      files: generatedFiles
     });
   } catch (err) {
     console.error('Erro no chat:', err);
