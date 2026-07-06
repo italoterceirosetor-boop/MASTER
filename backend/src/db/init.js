@@ -39,6 +39,19 @@ export async function initDatabase() {
       )
     `);
 
+    // Tabela de arquivos gerados pela IA
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS generated_files (
+        id SERIAL PRIMARY KEY,
+        conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+        filename VARCHAR(500) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        content BYTEA NOT NULL,
+        size INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Índices pra performance
     await client.query(`CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, updated_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at)`);
