@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 // Componente botão de anexo + previews dos arquivos
+// Suporta: clique para selecionar, Ctrl+V para colar print
 export default function FileUpload({ files, setFiles, disabled }) {
   const inputRef = useRef(null);
 
@@ -11,8 +12,44 @@ export default function FileUpload({ files, setFiles, disabled }) {
   function handleChange(e) {
     const selected = Array.from(e.target.files || []);
     addFiles(selected);
-    e.target.value = ''; // permite selecionar o mesmo arquivo de novo
+    e.target.value = '';
   }
+
+  // Listener pra Ctrl+V (colar imagem)
+  useEffect(() => {
+    function handlePaste(e) {
+      if (disabled) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const pastedFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) {
+            // Gera nome melhor pra imagem colada
+            if (file.name === 'image.png' && file.type.startsWith('image/')) {
+              const timestamp = new Date().toISOString().slice(0,19).replace(/[:T]/g, '-');
+              const renamed = new File([file], `print-${timestamp}.png`, { type: file.type });
+              pastedFiles.push(renamed);
+            } else {
+              pastedFiles.push(file);
+            }
+          }
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        addFiles(pastedFiles);
+      }
+    }
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [files, disabled]);
 
   function addFiles(newFiles) {
     const validFiles = newFiles.filter(file => {
@@ -21,12 +58,13 @@ export default function FileUpload({ files, setFiles, disabled }) {
       return allowed.includes(ext);
     });
 
-    // Evita duplicados
     const filtered = validFiles.filter(f =>
       !files.some(existing => existing.name === f.name && existing.size === f.size)
     );
 
-    setFiles([...files, ...filtered]);
+    if (filtered.length > 0) {
+      setFiles([...files, ...filtered]);
+    }
   }
 
   function removeFile(index) {
@@ -41,16 +79,16 @@ export default function FileUpload({ files, setFiles, disabled }) {
 
   function getIcon(name) {
     const ext = name.split('.').pop().toLowerCase();
-    if (['pdf'].includes(ext)) return '📄';
+    if (ext === 'pdf') return '📄';
     if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return '🖼️';
     if (['xlsx', 'xls', 'csv'].includes(ext)) return '📊';
-    if (['txt'].includes(ext)) return '📝';
-    if (['docx'].includes(ext)) return '📃';
+    if (ext === 'txt') return '📝';
+    if (ext === 'docx') return '📃';
     return '📎';
   }
 
   return (
-    <div className="file-upload">
+    <>
       <input
         ref={inputRef}
         type="file"
@@ -65,32 +103,58 @@ export default function FileUpload({ files, setFiles, disabled }) {
         className="attach-btn"
         onClick={handleClick}
         disabled={disabled}
-        title="Anexar arquivo"
+        title="Anexar arquivo (ou Ctrl+V para colar print)"
       >
         📎
       </button>
+    </>
+  );
+}
 
-      {files.length > 0 && (
-        <div className="file-previews">
-          {files.map((file, i) => (
-            <div key={i} className="file-chip">
-              <span className="file-icon">{getIcon(file.name)}</span>
-              <span className="file-name" title={file.name}>
-                {file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name}
-              </span>
-              <span className="file-size">{formatSize(file.size)}</span>
-              <button
-                type="button"
-                className="file-remove"
-                onClick={() => removeFile(i)}
-                title="Remover"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+// Componente separado pra mostrar os previews ACIMA do input
+export function FilePreviews({ files, setFiles, disabled }) {
+  if (files.length === 0) return null;
+
+  function removeFile(index) {
+    setFiles(files.filter((_, i) => i !== index));
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  function getIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    if (ext === 'pdf') return '📄';
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return '🖼️';
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return '📊';
+    if (ext === 'txt') return '📝';
+    if (ext === 'docx') return '📃';
+    return '📎';
+  }
+
+  return (
+    <div className="file-previews">
+      {files.map((file, i) => (
+        <div key={i} className="file-chip">
+          <span className="file-icon">{getIcon(file.name)}</span>
+          <span className="file-name" title={file.name}>
+            {file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name}
+          </span>
+          <span className="file-size">{formatSize(file.size)}</span>
+          <button
+            type="button"
+            className="file-remove"
+            onClick={() => removeFile(i)}
+            disabled={disabled}
+            title="Remover"
+          >
+            ×
+          </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }
