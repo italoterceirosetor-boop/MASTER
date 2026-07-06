@@ -410,9 +410,99 @@ form input:focus {
 .input-form {
   padding: 16px 24px 24px;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   border-top: 1px solid var(--border);
   background: var(--bg-dark);
+}
+
+.input-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.file-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.attach-btn {
+  width: 44px;
+  height: 44px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.attach-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--primary);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.file-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  max-width: 240px;
+}
+
+.file-icon {
+  font-size: 14px;
+}
+
+.file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  color: var(--text);
+}
+
+.file-size {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.file-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 2px;
+}
+
+.file-remove:hover {
+  color: var(--danger);
 }
 
 .input-form input {
