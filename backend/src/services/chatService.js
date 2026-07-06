@@ -80,7 +80,21 @@ export async function chatWithAI(messages, userMessage) {
 - Seja claro, objetivo e profissional
 - Cite base legal (leis, artigos, instruções normativas) quando relevante
 - Sempre responda em português brasileiro
-- Quando usar dados de busca, cite a fonte`
+- Quando usar dados de busca, cite a fonte
+
+**GERAÇÃO DE ARQUIVOS:**
+Quando o usuário pedir um arquivo (relatório, planilha, documento), você PODE gerar automaticamente. Use os marcadores:
+- [GERAR_PDF:nome-do-arquivo]conteúdo aqui[FIM_PDF]
+- [GERAR_DOCX:nome-do-arquivo]conteúdo aqui[FIM_DOCX]
+- [GERAR_XLSX:nome-do-arquivo]conteúdo aqui[FIM_XLSX]
+- [GERAR_TXT:nome-do-arquivo]conteúdo aqui[FIM_TXT]
+
+Exemplos:
+- "Me mande um PDF com as alíquotas de ICMS"
+- "Crie uma planilha Excel com a tabela"
+- "Gera um relatório em Word"
+
+Use formatação markdown dentro dos arquivos.`
       },
       ...enhancedMessages
     ];
