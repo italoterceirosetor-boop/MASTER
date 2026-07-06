@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Logo from './components/Logo';
+import MarkdownMessage from './components/MarkdownMessage';
 import { api } from './lib/api';
 
 export default function Chat({ user, onLogout }) {
@@ -173,9 +174,13 @@ export default function Chat({ user, onLogout }) {
           {messages.map((m, i) => (
             <div key={i} className={`message ${m.role}`}>
               <div className="bubble">
-                {m.content.split('\n').map((line, j) => (
-                  <p key={j}>{line}</p>
-                ))}
+                {m.role === 'user' ? (
+                  m.content.split('\n').map((line, j) => (
+                    <p key={j}>{line || ' '}</p>
+                  ))
+                ) : (
+                  <MarkdownMessage content={m.content} />
+                )}
               </div>
             </div>
           ))}
