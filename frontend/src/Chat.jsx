@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Logo from './components/Logo';
 import MarkdownMessage from './components/MarkdownMessage';
 import FileUpload, { FilePreviews } from './components/FileUpload';
+import FileDownloads from './components/FileDownloads';
 import { api } from './lib/api';
 
 export default function Chat({ user, onLogout }) {
@@ -107,7 +108,7 @@ export default function Chat({ user, onLogout }) {
         });
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.message, files: data.files }]);
 
       if (!conversationId) {
         setConversationId(data.conversationId);
@@ -213,7 +214,15 @@ export default function Chat({ user, onLogout }) {
                     <p key={j}>{line || ' '}</p>
                   ))
                 ) : (
-                  <MarkdownMessage content={m.content} />
+                  <>
+                    <MarkdownMessage content={m.content} />
+                    {m.files && m.files.length > 0 && (
+                      <FileDownloads
+                        files={m.files}
+                        apiUrl={import.meta.env.VITE_API_URL || 'http://localhost:3001'}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </div>
