@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { extractFileContent, validateFile, formatFilesForAI } from '../services/fileService.js';
 import { pool } from '../db/pool.js';
 import { chatWithAI } from '../services/chatService.js';
+import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT } from '../services/generatorService.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -147,3 +148,35 @@ router.post('/chat', authMiddleware, upload.array('files', 5), async (req, res) 
 });
 
 export default router;
+
+// Download de arquivo gerado pela IA
+router.get('/file/:id', authMiddleware, async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    const userId = req.userId;
+
+    // Busca arquivo e verifica ownership
+    const result = await pool.query(
+      `SELECT gf.* FROM generated_files gf
+       JOIN conversations c ON gf.conversation_id = c.id
+       WHERE gf.id = $1 AND c.user_id = $2`,
+      [fileId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Arquivo não encontrado' });
+    }
+
+    const file = result.rows[0];
+
+    res.setHeader('Content-Type', file.mime_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Length', file.size);
+
+    // Converte o buffer do banco pra enviar
+    res.send(Buffer.from(file.content));
+  } catch (err) {
+    console.error('Erro no download:', err);
+    res.status(500).json({ error: 'Erro ao baixar arquivo' });
+  }
+});
