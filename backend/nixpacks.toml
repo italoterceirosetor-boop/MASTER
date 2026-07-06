@@ -1,0 +1,6 @@
+// NIXPACKS configuration for Railway
+// Tells Railway how to build and run the project
+[build]
+cmds = ["npm install"]
+[phases.start]
+cmd = "node src/index.js"
