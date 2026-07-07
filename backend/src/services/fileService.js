@@ -4,13 +4,13 @@ import path from 'path';
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
-import { readZip, readRar, readXML } from './archiveService.js';
+import { readZip, readXML } from './archiveService.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const SUPPORTED_EXTENSIONS = [
   '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif',
   '.xlsx', '.xls', '.csv', '.txt', '.docx',
-  '.xml', '.zip', '.rar'
+  '.xml', '.zip'
 ];
 
 export async function extractFileContent(filePath, mimetype, originalName) {
@@ -61,19 +61,12 @@ export async function extractFileContent(filePath, mimetype, originalName) {
       return { type: 'docx', text: result.value, name: originalName };
     }
 
-    // XML (NFe, NFSe, etc)
     if (ext === '.xml' || mimetype === 'application/xml' || mimetype === 'text/xml') {
       return await readXML(filePath, originalName);
     }
 
-    // ZIP
     if (ext === '.zip') {
       return await readZip(filePath);
-    }
-
-    // RAR
-    if (ext === '.rar') {
-      return await readRar(filePath);
     }
 
     // Imagens
@@ -95,7 +88,7 @@ export async function extractFileContent(filePath, mimetype, originalName) {
 export function validateFile(file) {
   const ext = path.extname(file.originalname).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-    throw new Error(`Tipo não suportado: ${ext}. Use: PDF, imagens, Excel, CSV, TXT, DOCX, XML, ZIP ou RAR`);
+    throw new Error(`Tipo não suportado: ${ext}. Use: PDF, imagens, Excel, CSV, TXT, DOCX, XML ou ZIP`);
   }
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)}MB. Máximo: 10MB`);
