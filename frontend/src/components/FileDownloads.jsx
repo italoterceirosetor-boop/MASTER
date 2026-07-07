@@ -3,7 +3,7 @@ import MarkdownMessage from './MarkdownMessage';
 import { api } from '../lib/api';
 
 // Mostra resposta da IA com opção de editar/regenerar
-export default function FileDownloads({ files, content, conversationId, onUpdate, apiUrl }) {
+export default function FileDownloads({ files, content, conversationId, originalPrompt, onUpdate, apiUrl }) {
   const [editing, setEditing] = useState(false);
   const [editedText, setEditedText] = useState(content);
   const [generating, setGenerating] = useState(false);
@@ -50,10 +50,17 @@ export default function FileDownloads({ files, content, conversationId, onUpdate
       const type = typeMap[ext] || 'pdf';
       const baseName = file.filename.replace(/\.[^.]+$/, '');
 
+      // USA O PROMPT ORIGINAL pra detectar tema/opções
       const response = await fetch(`${apiUrl}/api/upload/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ conversationId, text: editedText, fileType: type, filename: baseName })
+        body: JSON.stringify({
+          conversationId,
+          text: editedText,
+          fileType: type,
+          filename: baseName,
+          originalPrompt: originalPrompt || ''  // IMPORTANTE: passa o prompt original
+        })
       });
 
       if (!response.ok) {
@@ -62,15 +69,11 @@ export default function FileDownloads({ files, content, conversationId, onUpdate
       }
 
       const newFile = await response.json();
-
-      // Substitui o arquivo antigo pelo novo
       const updatedFiles = currentFiles.map(f => f.id === file.id ? newFile : f);
       setCurrentFiles(updatedFiles);
 
       if (onUpdate) onUpdate({ content: editedText, files: updatedFiles });
-
       setEditing(false);
-      alert('✅ Arquivo regenerado com sucesso!');
     } catch (err) {
       alert('Erro: ' + err.message);
     } finally {
@@ -80,7 +83,6 @@ export default function FileDownloads({ files, content, conversationId, onUpdate
 
   return (
     <div className="editable-response">
-      {/* Conteúdo da resposta (editável ou não) */}
       {editing ? (
         <textarea
           className="edit-textarea"
@@ -91,28 +93,19 @@ export default function FileDownloads({ files, content, conversationId, onUpdate
         />
       ) : null}
 
-      {/* Botões de ação */}
       <div className="response-actions">
         {editing ? (
           <>
             <button
               className="action-btn save"
-              onClick={() => {
-                // Regenera TODOS os arquivos do mesmo tipo
-                if (currentFiles.length > 0) {
-                  regenerateFile(currentFiles[0]);
-                }
-              }}
+              onClick={() => currentFiles.length > 0 && regenerateFile(currentFiles[0])}
               disabled={generating}
             >
               {generating ? '⏳ Gerando...' : '🔄 Regenerar arquivo'}
             </button>
             <button
               className="action-btn cancel"
-              onClick={() => {
-                setEditedText(content);
-                setEditing(false);
-              }}
+              onClick={() => { setEditedText(content); setEditing(false); }}
               disabled={generating}
             >
               ❌ Cancelar
@@ -133,16 +126,11 @@ export default function FileDownloads({ files, content, conversationId, onUpdate
         )}
       </div>
 
-      {/* Lista de arquivos pra download */}
       {currentFiles && currentFiles.length > 0 && (
         <div className="file-downloads">
           <p className="downloads-label">📎 Arquivos gerados:</p>
           {currentFiles.map(file => (
-            <button
-              key={file.id}
-              className="download-btn"
-              onClick={() => downloadFile(file)}
-            >
+            <button key={file.id} className="download-btn" onClick={() => downloadFile(file)}>
               <span className="download-icon">{getIcon(file.filename)}</span>
               <span className="download-name">{file.filename}</span>
               <span className="download-size">{formatSize(file.size)}</span>
