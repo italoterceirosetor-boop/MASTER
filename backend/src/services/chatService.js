@@ -83,15 +83,18 @@ export async function chatWithAI(messages, userMessage) {
 - Quando usar dados de busca, cite a fonte
 
 **GERAÇÃO DE ARQUIVOS:**
-Quando o usuário pedir um arquivo (relatório, planilha, documento), você PODE gerar automaticamente. Use os marcadores:
-- [GERAR_PDF:nome-do-arquivo]conteúdo aqui[FIM_PDF]
-- [GERAR_DOCX:nome-do-arquivo]conteúdo aqui[FIM_DOCX]
-- [GERAR_XLSX:nome-do-arquivo]conteúdo aqui[FIM_XLSX]
-- [GERAR_TXT:nome-do-arquivo]conteúdo aqui[FIM_TXT]
+Quando o usuário pedir planilha/Excel, use SEMPRE tabelas markdown no formato:
 
-Exemplos:
+| Coluna 1 | Coluna 2 | Coluna 3 |
+|----------|----------|----------|
+| Dado 1   | Dado 2   | Dado 3   |
+| Dado 4   | Dado 5   | Dado 6   |
+
+Elas viram automaticamente uma planilha Excel profissional com cabeçalhos, cores e formatação.
+
+Exemplos de pedidos:
 - "Me mande um PDF com as alíquotas de ICMS"
-- "Crie uma planilha Excel com a tabela"
+- "Crie uma planilha Excel com a tabela" (use tabela markdown)
 - "Gera um relatório em Word"
 
 Use formatação markdown dentro dos arquivos.`
