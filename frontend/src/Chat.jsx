@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import Logo from './components/Logo';
 import MarkdownMessage from './components/MarkdownMessage';
 import FileUpload, { FilePreviews } from './components/FileUpload';
-import FileDownloads from './components/FileDownloads';
 import { api } from './lib/api';
 
 export default function Chat({ user, onLogout }) {
@@ -217,19 +216,52 @@ export default function Chat({ user, onLogout }) {
                   <>
                     <MarkdownMessage content={m.content} />
                     {m.files && m.files.length > 0 && (
-                      <FileDownloads
-                        files={m.files}
-                        content={m.content}
-                        conversationId={conversationId}
-                        originalPrompt={messages[i-1]?.prompt || ''}
-                        apiUrl={import.meta.env.VITE_API_URL || 'http://localhost:3001'}
-                        onUpdate={(data) => {
-                          // Atualiza a mensagem com o novo conteúdo e arquivos
-                          setMessages(prev => prev.map((msg, idx) =>
-                            idx === i ? { ...msg, content: data.content, files: data.files } : msg
-                          ));
-                        }}
-                      />
+                      <div className="file-downloads">
+                        <p className="downloads-label">📎 Arquivos:</p>
+                        {m.files.map(file => {
+                          const getIcon = (fn) => {
+                            const ext = fn.split('.').pop().toLowerCase();
+                            if (ext === 'pdf') return '📄';
+                            if (['xlsx', 'xls', 'csv'].includes(ext)) return '📊';
+                            if (ext === 'docx') return '📃';
+                            if (ext === 'txt') return '📝';
+                            return '📎';
+                          };
+                          const formatSize = (bytes) => {
+                            if (bytes < 1024) return bytes + ' B';
+                            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                            return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+                          };
+                          const tok = localStorage.getItem('master_token');
+                          const api = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                          return (
+                            <button
+                              key={file.id}
+                              className="download-btn"
+                              onClick={() => {
+                                fetch(`${api}/api/upload/file/${file.id}`, {
+                                  headers: { Authorization: `Bearer ${tok}` }
+                                })
+                                  .then(res => res.ok ? res.blob() : Promise.reject('Erro'))
+                                  .then(blob => {
+                                    const a = document.createElement('a');
+                                    a.href = URL.createObjectURL(blob);
+                                    a.download = file.filename;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    a.remove();
+                                    URL.revokeObjectURL(a.href);
+                                  });
+                              }}
+                            >
+                              <span className="download-icon">{getIcon(file.filename)}</span>
+                              <span className="download-name">{file.filename}</span>
+                              <span className="download-size">{formatSize(file.size)}</span>
+                              <span className="download-arrow">⬇</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                   </>
                 )}
