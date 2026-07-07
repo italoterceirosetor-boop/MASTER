@@ -214,6 +214,18 @@ export async function generatePDF({ title, content, theme = 'executivo', options
         }
       }
 
+      // Renderiza texto linha por linha com posicionamento correto
+      function renderTextLine(line, fontSize, fontName, color, indent = 0) {
+        ensureSpace(fontSize + 8);
+        doc.fontSize(fontSize).font(fontName).fillColor(color);
+        doc.text(line, marginLeft + indent, cursorY, {
+          width: contentWidth - indent,
+          align: 'left',
+          lineGap: 3
+        });
+        cursorY = doc.y + 6;
+      }
+
       function drawTable(rows) {
         if (rows.length === 0) return;
         if (options.semTabela) return;
@@ -312,21 +324,15 @@ export async function generatePDF({ title, content, theme = 'executivo', options
 
         if (line.startsWith('# ')) {
           ensureSpace(40); cursorY += 10;
-          doc.fontSize(t.h1Size + 4).font('Helvetica-Bold').fillColor(t.primaryColor);
-          doc.text(line.substring(2), marginLeft, cursorY, { width: contentWidth });
-          cursorY = doc.y + 12;
+          renderTextLine(line.substring(2), t.h1Size + 4, 'Helvetica-Bold', t.primaryColor);
         }
         else if (line.startsWith('## ')) {
           ensureSpace(32); cursorY += 8;
-          doc.fontSize(t.h2Size + 2).font('Helvetica-Bold').fillColor(t.primaryColor);
-          doc.text(line.substring(3), marginLeft, cursorY, { width: contentWidth });
-          cursorY = doc.y + 8;
+          renderTextLine(line.substring(3), t.h2Size + 2, 'Helvetica-Bold', t.primaryColor);
         }
         else if (line.startsWith('### ')) {
           ensureSpace(26); cursorY += 6;
-          doc.fontSize(t.h2Size).font('Helvetica-Bold').fillColor('#333');
-          doc.text(line.substring(4), marginLeft, cursorY, { width: contentWidth });
-          cursorY = doc.y + 6;
+          renderTextLine(line.substring(4), t.h2Size, 'Helvetica-Bold', '#333');
         }
         else if (trimmed === '---') {
           ensureSpace(15); cursorY += 5;
@@ -335,49 +341,30 @@ export async function generatePDF({ title, content, theme = 'executivo', options
           cursorY += 10;
         }
         else if (line.startsWith('> ')) {
-          ensureSpace(30);
-          doc.fontSize(t.bodySize).font('Helvetica-Oblique').fillColor('#555');
-          doc.text(line.substring(2).replace(/\*\*/g, ''), marginLeft + 20, cursorY, {
-            width: contentWidth - 20, align: 'left'
-          });
-          cursorY = doc.y + 6;
-          doc.font(t.font).fillColor('#000');
+          renderTextLine(line.substring(2).replace(/\*\*/g, ''), t.bodySize, 'Helvetica-Oblique', '#555', 20);
         }
         else if (line.startsWith('- ') || line.startsWith('* ')) {
-          ensureSpace(20);
+          ensureSpace(t.bodySize + 6);
           doc.fontSize(t.bodySize).font('Helvetica').fillColor(t.accentColor);
           doc.text('•', marginLeft + 5, cursorY);
-          doc.fillColor('#000').text(line.substring(2).replace(/\*\*/g, ''), marginLeft + 20, cursorY, {
-            width: contentWidth - 20, align: 'left'
-          });
-          cursorY = doc.y + 4;
+          renderTextLine(line.substring(2).replace(/\*\*/g, ''), t.bodySize, 'Helvetica', '#000', 15);
         }
         else if (/^\d+\.\s/.test(line)) {
-          ensureSpace(20);
+          ensureSpace(t.bodySize + 6);
           const match = line.match(/^(\d+)\.\s(.*)$/);
           doc.fontSize(t.bodySize).font('Helvetica-Bold').fillColor(t.primaryColor);
           doc.text(`${match[1]}.`, marginLeft + 5, cursorY);
-          doc.font(t.font).fillColor('#000');
-          doc.text(match[2].replace(/\*\*/g, ''), marginLeft + 25, cursorY, {
-            width: contentWidth - 25, align: 'left'
-          });
-          cursorY = doc.y + 4;
+          renderTextLine(match[2].replace(/\*\*/g, ''), t.bodySize, 'Helvetica', '#000', 20);
         }
-        else if (trimmed === '') cursorY += 8;
+        else if (trimmed === '') {
+          cursorY += 8;
+        }
         else {
-          ensureSpace(30);
+          ensureSpace(t.bodySize + 10);
+          // Processa negrito inline - divide em segmentos
           const segments = line.split(/(\*\*[^*]+\*\*)/g);
-          for (const seg of segments) {
-            if (!seg) continue;
-            if (seg.startsWith('**') && seg.endsWith('**')) {
-              doc.fontSize(t.bodySize).font('Helvetica-Bold').fillColor('#000')
-                 .text(seg.slice(2, -2), marginLeft, cursorY, { width: contentWidth, align: 'left', continued: false });
-            } else {
-              doc.fontSize(t.bodySize).font(t.font).fillColor('#000')
-                 .text(seg, marginLeft, cursorY, { width: contentWidth, align: 'left', continued: false });
-            }
-          }
-          cursorY = doc.y + 6;
+          const processedLine = segments.map(s => s.replace(/\*\*/g, '')).join('');
+          renderTextLine(processedLine, t.bodySize, 'Helvetica', '#000');
         }
       }
 
@@ -642,19 +629,39 @@ export function generateTXT({ title, content }) {
 
 export function parseGenerationMarkers(text) {
   const markers = [];
-  const patterns = [
-    { regex: /\[GERAR_PDF:([^\]]+)\]([\s\S]*?)\[FIM_PDF\]/g, type: 'pdf' },
-    { regex: /\[GERAR_DOCX:([^\]]+)\]([\s\S]*?)\[FIM_DOCX\]/g, type: 'docx' },
-    { regex: /\[GERAR_XLSX:([^\]]+)\]([\s\S]*?)\[FIM_XLSX\]/g, type: 'xlsx' },
-    { regex: /\[GERAR_TXT:([^\]]+)\]([\s\S]*?)\[FIM_TXT\]/g, type: 'txt' }
-  ];
+
+  // Padrão 1: marcador completo [GERAR_PDF:nome]conteúdo[FIM_PDF]
+  const completeRegex = /\[GERAR_(PDF|DOCX|XLSX|TXT):([^\]]+)\]([\s\S]*?)\[FIM_(PDF|DOCX|XLSX|TXT)\]/g;
+
   let cleanText = text;
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.regex.exec(text)) !== null) {
-      markers.push({ type: pattern.type, filename: match[1].trim(), content: match[2].trim() });
-    }
-    cleanText = cleanText.replace(pattern.regex, '');
+  let match;
+  while ((match = completeRegex.exec(text)) !== null) {
+    markers.push({
+      type: match[1].toLowerCase(),
+      filename: match[2].trim(),
+      content: match[3].trim()
+    });
+    cleanText = cleanText.replace(match[0], '');
   }
+
+  // Padrão 2: marcador sem fechar [GERAR_PDF:nome]conteúdo (pega até o fim ou próximo marcador)
+  const openRegex = /\[GERAR_(PDF|DOCX|XLSX|TXT):([^\]]+)\]([\s\S]*?)(?=\[GERAR_|$)/g;
+  while ((match = openRegex.exec(text)) !== null) {
+    // Só adiciona se não foi capturado pelo padrão completo
+    const alreadyCaptured = markers.some(m => m.filename === match[2].trim());
+    if (!alreadyCaptured && match[3].trim().length > 50) {
+      markers.push({
+        type: match[1].toLowerCase(),
+        filename: match[2].trim(),
+        content: match[3].trim()
+      });
+      cleanText = cleanText.replace(match[0], '');
+    }
+  }
+
+  // Remove marcadores órfãos que sobraram
+  cleanText = cleanText.replace(/\[GERAR_(PDF|DOCX|XLSX|TXT):[^\]]+\]/g, '');
+  cleanText = cleanText.replace(/\[FIM_(PDF|DOCX|XLSX|TXT)\]/g, '');
+
   return { cleanText: cleanText.trim(), markers };
 }
