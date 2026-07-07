@@ -73,7 +73,7 @@ export default function Chat({ user, onLogout }) {
     const displayMessage = userMessage + (filesToSend.length > 0
       ? `\n\n📎 ${filesToSend.length} arquivo(s) anexado(s)`
       : '');
-    setMessages(prev => [...prev, { role: 'user', content: displayMessage }]);
+    setMessages(prev => [...prev, { role: 'user', content: displayMessage, prompt: userMessage }]);
     setLoading(true);
 
     try {
@@ -221,13 +221,12 @@ export default function Chat({ user, onLogout }) {
                         files={m.files}
                         content={m.content}
                         conversationId={conversationId}
+                        originalPrompt={messages[i-1]?.prompt || ''}
                         apiUrl={import.meta.env.VITE_API_URL || 'http://localhost:3001'}
                         onUpdate={(data) => {
                           // Atualiza a mensagem com o novo conteúdo e arquivos
                           setMessages(prev => prev.map((msg, idx) =>
-                            idx === prev.length - 1 && msg.role === 'assistant'
-                              ? { ...msg, content: data.content, files: data.files }
-                              : msg
+                            idx === i ? { ...msg, content: data.content, files: data.files } : msg
                           ));
                         }}
                       />
