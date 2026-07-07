@@ -38,16 +38,50 @@ const THEMES = {
     primary: '#0F172A',
     accent: '#475569',
     bg: '#FFFFFF'
+  },
+  vermelho: {
+    name: 'Vermelho',
+    primary: '#DC2626',
+    accent: '#EF4444',
+    bg: '#FFFFFF'
+  },
+  verde: {
+    name: 'Verde',
+    primary: '#059669',
+    accent: '#10B981',
+    bg: '#FFFFFF'
+  },
+  azul: {
+    name: 'Azul',
+    primary: '#2563EB',
+    accent: '#3B82F6',
+    bg: '#FFFFFF'
+  },
+  preto: {
+    name: 'Preto',
+    primary: '#000000',
+    accent: '#404040',
+    bg: '#FFFFFF'
   }
 };
 
 export function detectTheme(message) {
   const lower = message.toLowerCase();
+
+  // Cores específicas têm prioridade
+  if (/vermelho|vermelha|cor\s*vermelha/.test(lower)) return 'vermelho';
+  if (/verde|cor\s*verde/.test(lower)) return 'verde';
+  if (/azul|cor\s*azul/.test(lower)) return 'azul';
+  if (/roxo|roxa|cor\s*roxa|lil[áa]s/.test(lower)) return 'colorido';
+  if (/preto|preta|cor\s*preta/.test(lower)) return 'preto';
+
+  // Temas
   if (/executiv|profissional|corporativ/.test(lower)) return 'executivo';
-  if (/clean|limpo|simples|m[íi]nimo/.test(lower)) return 'clean';
-  if (/color|roxo|rosa|colorido|vibrante/.test(lower)) return 'colorido';
-  if (/minimal|s[óo] texto|sem cabe[çc]alho/.test(lower)) return 'minimalista';
+  if (/clean|limpo|simples/.test(lower)) return 'clean';
+  if (/color|vibrante/.test(lower)) return 'colorido';
+  if (/minimal|s[óo]\s*texto/.test(lower)) return 'minimalista';
   if (/formal|serif|times|cl[áa]ssico|tradicional/.test(lower)) return 'formal';
+
   return 'executivo';
 }
 
@@ -61,7 +95,16 @@ export function detectOptions(message) {
     semImagem: /\bsem\s*imagem|tirar?\s*imagem|sem\s*gr[áa]fico/.test(lower),
     corPersonalizada: lower.match(/cor\s*([#a-f0-9]{3,6})/i)?.[1],
     fonteMenor: /\bfonte\s*(pequena|menor|10|9)|texto\s*menor/.test(lower),
-    fonteMaior: /\bfonte\s*(grande|maior|14|16)|texto\s*maior/.test(lower)
+    fonteMaior: /\bfonte\s*(grande|maior|14|16)|texto\s*maior/.test(lower),
+    // Modificadores adicionais
+    umaPagina: /\buma\s*p[áa]gina\b|\buma\s*folha\b|\bs[óo]\s*uma\b|conciso|resumido|breve|short/.test(lower),
+    detalhado: /\bdetalhado|completo|expandido|aprofundado|longo|completo/.test(lower),
+    // Cores específicas
+    corVermelha: /\bvermelho|vermelha|cor\s*vermelha/.test(lower),
+    corVerde: /\bverde|cor\s*verde/.test(lower),
+    corAzul: /\bazul|cor\s*azul/.test(lower),
+    corRoxa: /\broxo|roxa|cor\s*roxa/.test(lower),
+    corPreta: /\bpreto|preta|cor\s*preta/.test(lower)
   };
 }
 
