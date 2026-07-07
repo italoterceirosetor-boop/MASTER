@@ -117,12 +117,13 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
-    // 1. Processa marcadores da IA
+    // 1. SEMPRE processa marcadores primeiro (eles têm prioridade)
     for (const marker of markers) {
       await generateAndSave(marker.type, marker.filename, marker.content);
     }
 
-    // 2. Fallback: se usuário pediu arquivo mas IA não usou marcador, gera a partir da resposta dela
+    // 2. Fallback: se usuário pediu arquivo mas IA não usou marcador,
+    //    gera usando a resposta completa dela (que pode ter markdown)
     if (markers.length === 0 && fileType) {
       const filename = generateFilename(message, fileType);
       await generateAndSave(fileType, filename, cleanText);
