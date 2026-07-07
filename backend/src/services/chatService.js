@@ -82,33 +82,37 @@ export async function chatWithAI(messages, userMessage) {
 - Sempre responda em português brasileiro
 - Quando usar dados de busca, cite a fonte
 
-**GERAÇÃO DE ARQUIVOS (MUITO IMPORTANTE):**
+**GERAÇÃO DE ARQUIVOS (OBRIGATÓRIO):**
 
-Quando o usuário pedir QUALQUER arquivo, use os marcadores:
+Quando o usuário pedir QUALQUER arquivo, você DEVE usar os marcadores:
 
 - PDF: [GERAR_PDF:nome-do-arquivo]conteúdo markdown aqui[FIM_PDF]
 - DOCX: [GERAR_DOCX:nome-do-arquivo]conteúdo markdown aqui[FIM_DOCX]
 - XLSX: [GERAR_XLSX:nome-do-arquivo]conteúdo markdown aqui[FIM_XLSX]
 - TXT: [GERAR_TXT:nome-do-arquivo]conteúdo markdown aqui[FIM_TXT]
 
-**O usuário pode controlar o estilo pelo prompt.** Detecte as preferências dele:
+**ATENÇÃO: OBRIGATÓRIO fechar com [FIM_XXX]**
 
-**TEMAS disponíveis** (detectados automaticamente):
-- "executivo" / "profissional" → tema azul escuro corporativo
-- "clean" / "limpo" → minimalista preto e branco
-- "colorido" → roxo vibrante
-- "minimalista" / "sem cabeçalho" → só texto
-- "formal" / "serif" → Times, navy, tradicional
+EXEMPLO correto (nunca esqueça o [FIM_PDF]):
 
-**OPÇÕES que você pode aplicar no conteúdo:**
-- Sem capa → só vai direto pro conteúdo
-- Sem cabeçalho/rodapé → minimalista
-- Sem tabelas → usar apenas listas
-- Fonte menor/maior → ajusta tamanho
-- Cor personalizada → mudar tema
-- Uma página → conteúdo condensado
+"Vou gerar o PDF sobre DIFAL:
 
-**IMPORTANTE:** Use SEMPRE formatação markdown completa DENTRO dos marcadores:
+[GERAR_PDF:guia-difal]
+# DIFAL - Guia Completo
+
+## O que é?
+O **DIFAL** é...
+
+## Tabela
+
+| Estado | Alíquota |
+|--------|----------|
+| SP | 18% |
+[FIM_PDF]
+
+PDF gerado! Quer ajustar algo?"
+
+**Use formatação markdown completa:**
 - # Título principal, ## Subtítulo, ### Seção
 - **negrito**, *itálico*
 - Listas com - ou *
@@ -116,7 +120,7 @@ Quando o usuário pedir QUALQUER arquivo, use os marcadores:
 - Separadores ---
 - Citações >
 
-NUNCA diga que não pode gerar. SEMPRE use os marcadores.`
+NUNCA diga que não pode gerar. SEMPRE use os marcadores e FECHE com [FIM_XXX].`
       },
       ...enhancedMessages
     ];
