@@ -219,7 +219,17 @@ export default function Chat({ user, onLogout }) {
                     {m.files && m.files.length > 0 && (
                       <FileDownloads
                         files={m.files}
+                        content={m.content}
+                        conversationId={conversationId}
                         apiUrl={import.meta.env.VITE_API_URL || 'http://localhost:3001'}
+                        onUpdate={(data) => {
+                          // Atualiza a mensagem com o novo conteúdo e arquivos
+                          setMessages(prev => prev.map((msg, idx) =>
+                            idx === prev.length - 1 && msg.role === 'assistant'
+                              ? { ...msg, content: data.content, files: data.files }
+                              : msg
+                          ));
+                        }}
                       />
                     )}
                   </>
