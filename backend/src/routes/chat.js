@@ -7,6 +7,25 @@ import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, genera
 
 const router = express.Router();
 
+// Detecta se usuário pediu arquivo e qual tipo
+function detectFileRequest(message) {
+  const lower = message.toLowerCase();
+  // Ordem importa: PDF/Word/Excel/TXT específicos
+  if (/\b(pdf|relat[óo]rio|pdf)\b/i.test(lower)) return 'pdf';
+  if (/\b(word|docx|documento)\b/i.test(lower)) return 'docx';
+  if (/\b(excel|planilha|xlsx|spreadsheet)\b/i.test(lower)) return 'xlsx';
+  if (/\b(txt|texto|bloco de notas)\b/i.test(lower)) return 'txt';
+  return null;
+}
+
+// Gera um nome de arquivo baseado no pedido
+function generateFilename(message, type) {
+  const stopWords = ['me', 'manda', 'envia', 'gere', 'cria', 'faz', 'um', 'uma', 'sobre', 'do', 'da', 'de', 'o', 'a', 'em', 'para', 'com', 'por', 'que', 'qual'];
+  const words = message.toLowerCase().replace(/[^\w\sà-ú]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.includes(w));
+  const name = words.slice(0, 4).join('-') || 'documento';
+  return `${name}-${Date.now()}`;
+}
+
 // Enviar mensagem e receber resposta
 router.post('/', authMiddleware, async (req, res) => {
   try {
@@ -55,39 +74,40 @@ router.post('/', authMiddleware, async (req, res) => {
     // Detecta marcadores de geração de arquivos
     const { cleanText, markers } = parseGenerationMarkers(aiResponse);
 
-    // Gera os arquivos (se houver)
+    // Detecta pedido de arquivo pela mensagem do usuário (fallback)
+    const fileType = detectFileRequest(message);
     const generatedFiles = [];
-    for (const marker of markers) {
-      try {
-        let buffer;
-        const filename = `${marker.filename}.${marker.type}`;
-        let mimeType;
 
-        if (marker.type === 'pdf') {
-          buffer = await generatePDF({ title: marker.filename, content: marker.content });
+    // Função auxiliar pra gerar e salvar arquivo
+    async function generateAndSave(type, filename, content) {
+      try {
+        let buffer, mimeType;
+        const fullFilename = `${filename}.${type}`;
+
+        if (type === 'pdf') {
+          buffer = await generatePDF({ title: filename, content });
           mimeType = 'application/pdf';
-        } else if (marker.type === 'docx') {
-          buffer = await generateDOCX({ title: marker.filename, content: marker.content });
+        } else if (type === 'docx') {
+          buffer = await generateDOCX({ title: filename, content });
           mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-        } else if (marker.type === 'xlsx') {
-          buffer = await generateXLSX({ title: marker.filename, content: marker.content });
+        } else if (type === 'xlsx') {
+          buffer = await generateXLSX({ title: filename, content });
           mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        } else if (marker.type === 'txt') {
-          buffer = generateTXT({ title: marker.filename, content: marker.content });
+        } else if (type === 'txt') {
+          buffer = generateTXT({ title: filename, content });
           mimeType = 'text/plain';
         }
 
         if (buffer) {
-          // Salva no banco
           const fileResult = await pool.query(
-            `INSERT INTO generated_files (conversation_id, filename, mime_type, content)
-             VALUES ($1, $2, $3, $4) RETURNING id`,
-            [convId, filename, mimeType, buffer]
+            `INSERT INTO generated_files (conversation_id, filename, mime_type, content, size)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [convId, fullFilename, mimeType, buffer, buffer.length]
           );
 
           generatedFiles.push({
             id: fileResult.rows[0].id,
-            filename,
+            filename: fullFilename,
             mimeType,
             size: buffer.length
           });
@@ -95,6 +115,17 @@ router.post('/', authMiddleware, async (req, res) => {
       } catch (err) {
         console.error('Erro ao gerar arquivo:', err);
       }
+    }
+
+    // 1. Processa marcadores da IA
+    for (const marker of markers) {
+      await generateAndSave(marker.type, marker.filename, marker.content);
+    }
+
+    // 2. Fallback: se usuário pediu arquivo mas IA não usou marcador, gera a partir da resposta dela
+    if (markers.length === 0 && fileType) {
+      const filename = generateFilename(message, fileType);
+      await generateAndSave(fileType, filename, cleanText);
     }
 
     // Salva resposta (sem os marcadores)
