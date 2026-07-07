@@ -108,11 +108,10 @@ export function detectOptions(message) {
   };
 }
 
-// ====== PDF PROFISSIONAL COM TEMAS ======
+// ====== PDF PROFISSIONAL (REESCRITO COM MOVE DOWN CORRETO) ======
 export async function generatePDF({ title, content, theme = 'executivo', options = {} }) {
   const t = { ...THEMES[theme] || THEMES.executivo };
 
-  // Aplica overrides
   if (options.corPersonalizada) {
     t.primaryColor = options.corPersonalizada.startsWith('#') ? options.corPersonalizada : '#' + options.corPersonalizada;
     t.headerBg = t.primaryColor;
@@ -127,13 +126,9 @@ export async function generatePDF({ title, content, theme = 'executivo', options
     try {
       const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 70, bottom: 70, left: 70, right: 70 },
+        margins: { top: 80, bottom: 60, left: 60, right: 60 },
         bufferPages: true,
-        info: {
-          Title: title,
-          Author: 'Master IA',
-          Creator: 'Master IA'
-        }
+        info: { Title: title, Author: 'Master IA', Creator: 'Master IA' }
       });
 
       const chunks = [];
@@ -143,41 +138,30 @@ export async function generatePDF({ title, content, theme = 'executivo', options
 
       const pageWidth = doc.page.width;
       const pageHeight = doc.page.height;
-      const marginLeft = 70;
-      const marginRight = 70;
+      const marginLeft = 60;
+      const marginRight = 60;
       const contentWidth = pageWidth - marginLeft - marginRight;
-      const marginTop = 70;
-      const marginBottom = 70;
 
       function addHeader() {
         if (!t.showHeader) return;
         doc.save();
-        doc.fillColor(t.primaryColor)
-           .fontSize(11)
-           .font('Helvetica-Bold')
-           .text('Master IA', marginLeft, 30);
-
-        doc.fontSize(8)
-           .fillColor('#888')
-           .font('Helvetica')
-           .text('Master Contabilidade & Consultoria', marginLeft, 45);
-
-        doc.strokeColor(t.primaryColor)
-           .lineWidth(1)
-           .moveTo(marginLeft, 60)
-           .lineTo(pageWidth - marginRight, 60)
-           .stroke();
+        doc.fillColor(t.primaryColor).fontSize(10).font('Helvetica-Bold')
+           .text('Master IA', marginLeft, 25, { lineBreak: false });
+        doc.fontSize(7).fillColor('#888').font('Helvetica')
+           .text('Master Contabilidade & Consultoria', marginLeft, 40, { lineBreak: false });
+        doc.strokeColor(t.primaryColor).lineWidth(1)
+           .moveTo(marginLeft, 55).lineTo(pageWidth - marginRight, 55).stroke();
         doc.restore();
       }
 
       function addFooter(pageNum, totalPages) {
         if (!t.showFooter) return;
-        const footerY = pageHeight - 40;
         doc.save();
-        doc.fontSize(8).fillColor('#888').font('Helvetica');
-        doc.text('Master IA — Documento gerado automaticamente', marginLeft, footerY);
+        const footerY = pageHeight - 30;
+        doc.fontSize(7).fillColor('#888').font('Helvetica');
+        doc.text('Master IA — Documento gerado automaticamente', marginLeft, footerY, { lineBreak: false });
         doc.text(`Página ${pageNum} de ${totalPages}`, marginLeft, footerY, {
-          width: contentWidth, align: 'right'
+          width: contentWidth, align: 'right', lineBreak: false
         });
         doc.restore();
       }
@@ -185,9 +169,9 @@ export async function generatePDF({ title, content, theme = 'executivo', options
       // CAPA
       if (t.showCover) {
         doc.fillColor(t.primaryColor).fontSize(40).font('Helvetica-Bold')
-           .text('Master IA', marginLeft, 200);
+           .text('Master IA', marginLeft, 200, { lineBreak: false });
         doc.fontSize(14).fillColor('#666').font('Helvetica')
-           .text('Master Contabilidade & Consultoria', marginLeft, 250);
+           .text('Master Contabilidade & Consultoria', marginLeft, 250, { lineBreak: false });
 
         doc.strokeColor(t.primaryColor).lineWidth(3)
            .moveTo(marginLeft, 290).lineTo(pageWidth - marginRight, 290).stroke();
@@ -204,113 +188,131 @@ export async function generatePDF({ title, content, theme = 'executivo', options
         addHeader();
       }
 
-      let cursorY = t.showCover ? 80 : 50;
-
-      function ensureSpace(neededHeight) {
-        if (cursorY + neededHeight > pageHeight - marginBottom) {
-          doc.addPage();
-          addHeader();
-          cursorY = 80;
-        }
+      // Função de espaçamento usando moveDown (mais confiável)
+      function space(multiplier = 1) {
+        doc.moveDown(multiplier);
       }
 
-      // Renderiza texto linha por linha com posicionamento correto
-      function renderTextLine(line, fontSize, fontName, color, indent = 0) {
-        ensureSpace(fontSize + 8);
-        doc.fontSize(fontSize).font(fontName).fillColor(color);
-        doc.text(line, marginLeft + indent, cursorY, {
-          width: contentWidth - indent,
-          align: 'left',
-          lineGap: 3
-        });
-        cursorY = doc.y + 6;
+      function newSection() {
+        space(1.5);
       }
 
-      function drawTable(rows) {
-        if (rows.length === 0) return;
-        if (options.semTabela) return;
+      function renderHeading(text, size, color) {
+        space(1);
+        doc.fontSize(size).font('Helvetica-Bold').fillColor(color)
+           .text(text, marginLeft, doc.y, { width: contentWidth, align: 'left' });
+        space(0.5);
+      }
 
-        const parsed = rows
-          .filter(r => !r.includes('---'))
+      function renderParagraph(text, size, font, color, indent = 0) {
+        doc.fontSize(size).font(font).fillColor(color)
+           .text(text, marginLeft + indent, doc.y, { width: contentWidth - indent, align: 'left', lineGap: 3 });
+        space(0.5);
+      }
+
+      function renderBullet(text, size, color) {
+        doc.fontSize(size).font('Helvetica').fillColor(t.accentColor);
+        const bulletY = doc.y;
+        doc.text('•', marginLeft + 5, bulletY, { lineBreak: false });
+        doc.fillColor('#000').font('Helvetica')
+           .text(text, marginLeft + 20, bulletY, { width: contentWidth - 20, align: 'left', lineGap: 3 });
+        space(0.3);
+      }
+
+      function renderNumbered(num, text, size) {
+        doc.fontSize(size).font('Helvetica-Bold').fillColor(t.primaryColor);
+        const y = doc.y;
+        doc.text(`${num}.`, marginLeft + 5, y, { lineBreak: false });
+        doc.font('Helvetica').fillColor('#000')
+           .text(text, marginLeft + 25, y, { width: contentWidth - 25, align: 'left', lineGap: 3 });
+        space(0.3);
+      }
+
+      function renderQuote(text, size) {
+        doc.fontSize(size).font('Helvetica-Oblique').fillColor('#555')
+           .text(text, marginLeft + 20, doc.y, { width: contentWidth - 20, align: 'left', lineGap: 3 });
+        space(0.5);
+      }
+
+      function renderSeparator() {
+        space(0.8);
+        doc.strokeColor('#CCCCCC').lineWidth(0.5)
+           .moveTo(marginLeft, doc.y).lineTo(marginLeft + contentWidth, doc.y).stroke();
+        space(0.8);
+      }
+
+      function renderTable(rows) {
+        if (rows.length === 0 || options.semTabela) return;
+        const parsed = rows.filter(r => !r.includes('---'))
           .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
-
         if (parsed.length === 0) return;
 
         const colCount = parsed[0].length;
         const colWidth = contentWidth / colCount;
-        const rowHeight = 24;
-        const cellPadding = 6;
+        const rowHeight = 22;
+        const cellPad = 8;
 
-        const header = parsed[0];
-
-        ensureSpace(rowHeight);
-
-        doc.save();
-        doc.rect(marginLeft, cursorY, contentWidth, rowHeight).fillColor(t.headerBg).fill();
-        doc.restore();
-
+        // Cabeçalho
+        space(1);
+        const headerY = doc.y;
+        doc.rect(marginLeft, headerY, contentWidth, rowHeight).fillColor(t.headerBg).fill();
         doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
-        header.forEach((cellText, i) => {
-          const x = marginLeft + (i * colWidth) + cellPadding;
-          doc.text(cellText || '', x, cursorY + 6, {
-            width: colWidth - (cellPadding * 2),
-            align: 'center', ellipsis: true, height: rowHeight - 6
+        parsed[0].forEach((cellText, i) => {
+          doc.text(cellText || '', marginLeft + (i * colWidth) + cellPad, headerY + 5, {
+            width: colWidth - (cellPad * 2), align: 'center', lineBreak: false,
+            ellipsis: true, height: rowHeight - 5
           });
         });
-        cursorY += rowHeight;
+        doc.y = headerY + rowHeight;
 
-        doc.fillColor('#000').font('Helvetica').fontSize(9);
-
+        // Dados
+        doc.font('Helvetica').fontSize(9).fillColor('#000');
         for (let r = 1; r < parsed.length; r++) {
-          ensureSpace(rowHeight);
-
+          const rowY = doc.y;
           if (r % 2 === 0) {
-            doc.save();
-            doc.rect(marginLeft, cursorY, contentWidth, rowHeight).fillColor('#F8FAFC').fill();
-            doc.restore();
+            doc.rect(marginLeft, rowY, contentWidth, rowHeight).fillColor('#F8FAFC').fill();
           }
-
-          doc.strokeColor('#E2E8F0').lineWidth(0.5)
-             .moveTo(marginLeft, cursorY + rowHeight)
-             .lineTo(marginLeft + contentWidth, cursorY + rowHeight).stroke();
-
+          doc.fillColor('#000').font('Helvetica');
           parsed[r].forEach((cellText, i) => {
-            const x = marginLeft + (i * colWidth) + cellPadding;
-            const cleanText = (cellText || '').replace(/\*\*/g, '');
-            doc.fillColor('#000').text(cleanText, x, cursorY + 6, {
-              width: colWidth - (cellPadding * 2),
-              align: i === 0 ? 'left' : 'center', ellipsis: true, height: rowHeight - 6
+            doc.text(cellText.replace(/\*\*/g, '') || '', marginLeft + (i * colWidth) + cellPad, rowY + 5, {
+              width: colWidth - (cellPad * 2),
+              align: i === 0 ? 'left' : 'center',
+              lineBreak: false, ellipsis: true, height: rowHeight - 5
             });
           });
-          cursorY += rowHeight;
+          doc.y = rowY + rowHeight;
         }
 
-        cursorY += 15;
+        space(1);
       }
 
-      // Processa conteúdo
+      // ============ PROCESSA CONTEÚDO ============
       const lines = content.split('\n');
       let inCodeBlock = false, codeBuffer = [];
       let tableBuffer = [], inTable = false;
+
+      // Inicia após o header
+      if (!t.showCover) addHeader();
+      doc.y = t.showCover ? 80 : 70;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmed = line.trim();
 
         if (trimmed.startsWith('```')) {
-          if (!inCodeBlock) {
-            inCodeBlock = true; codeBuffer = []; continue;
-          } else {
-            const codeHeight = codeBuffer.length * 12 + 20;
-            ensureSpace(codeHeight);
-            doc.save();
-            doc.rect(marginLeft, cursorY, contentWidth, codeHeight).fillColor('#0d1117').fill();
-            doc.restore();
-            doc.fontSize(9).fillColor('#E6EDF3').font('Courier')
-               .text(codeBuffer.join('\n'), marginLeft + 10, cursorY + 8, { width: contentWidth - 20 });
-            doc.font(t.font).fillColor('#000').fontSize(t.bodySize);
-            cursorY += codeHeight + 10;
-            inCodeBlock = false; codeBuffer = []; continue;
+          if (!inCodeBlock) { inCodeBlock = true; codeBuffer = []; continue; }
+          else {
+            const codeText = codeBuffer.join('\n');
+            space(0.5);
+            const codeStartY = doc.y;
+            const codeHeight = Math.max(codeBuffer.length * 12 + 16, 30);
+            doc.rect(marginLeft, codeStartY, contentWidth, codeHeight).fillColor('#0d1117').fill();
+            doc.fillColor('#E6EDF3').font('Courier').fontSize(9)
+               .text(codeText, marginLeft + 10, codeStartY + 8, { width: contentWidth - 20 });
+            doc.y = codeStartY + codeHeight;
+            space(0.5);
+            inCodeBlock = false; codeBuffer = [];
+            continue;
           }
         }
         if (inCodeBlock) { codeBuffer.push(line); continue; }
@@ -318,57 +320,42 @@ export async function generatePDF({ title, content, theme = 'executivo', options
         if (line.startsWith('|') && line.endsWith('|')) {
           tableBuffer.push(line); inTable = true; continue;
         } else if (inTable && tableBuffer.length > 0) {
-          drawTable(tableBuffer);
+          renderTable(tableBuffer);
           tableBuffer = []; inTable = false;
         }
 
         if (line.startsWith('# ')) {
-          ensureSpace(40); cursorY += 10;
-          renderTextLine(line.substring(2), t.h1Size + 4, 'Helvetica-Bold', t.primaryColor);
+          renderHeading(line.substring(2), t.h1Size + 4, t.primaryColor);
         }
         else if (line.startsWith('## ')) {
-          ensureSpace(32); cursorY += 8;
-          renderTextLine(line.substring(3), t.h2Size + 2, 'Helvetica-Bold', t.primaryColor);
+          renderHeading(line.substring(3), t.h2Size + 2, t.primaryColor);
         }
         else if (line.startsWith('### ')) {
-          ensureSpace(26); cursorY += 6;
-          renderTextLine(line.substring(4), t.h2Size, 'Helvetica-Bold', '#333');
+          renderHeading(line.substring(4), t.h2Size, '#333');
         }
         else if (trimmed === '---') {
-          ensureSpace(15); cursorY += 5;
-          doc.strokeColor('#CCCCCC').lineWidth(0.5)
-             .moveTo(marginLeft, cursorY).lineTo(marginLeft + contentWidth, cursorY).stroke();
-          cursorY += 10;
+          renderSeparator();
         }
         else if (line.startsWith('> ')) {
-          renderTextLine(line.substring(2).replace(/\*\*/g, ''), t.bodySize, 'Helvetica-Oblique', '#555', 20);
+          renderQuote(line.substring(2).replace(/\*\*/g, ''), t.bodySize);
         }
         else if (line.startsWith('- ') || line.startsWith('* ')) {
-          ensureSpace(t.bodySize + 6);
-          doc.fontSize(t.bodySize).font('Helvetica').fillColor(t.accentColor);
-          doc.text('•', marginLeft + 5, cursorY);
-          renderTextLine(line.substring(2).replace(/\*\*/g, ''), t.bodySize, 'Helvetica', '#000', 15);
+          renderBullet(line.substring(2).replace(/\*\*/g, ''), t.bodySize, t.accentColor);
         }
         else if (/^\d+\.\s/.test(line)) {
-          ensureSpace(t.bodySize + 6);
           const match = line.match(/^(\d+)\.\s(.*)$/);
-          doc.fontSize(t.bodySize).font('Helvetica-Bold').fillColor(t.primaryColor);
-          doc.text(`${match[1]}.`, marginLeft + 5, cursorY);
-          renderTextLine(match[2].replace(/\*\*/g, ''), t.bodySize, 'Helvetica', '#000', 20);
+          renderNumbered(match[1], match[2].replace(/\*\*/g, ''), t.bodySize);
         }
         else if (trimmed === '') {
-          cursorY += 8;
+          space(0.5);
         }
         else {
-          ensureSpace(t.bodySize + 10);
-          // Processa negrito inline - divide em segmentos
-          const segments = line.split(/(\*\*[^*]+\*\*)/g);
-          const processedLine = segments.map(s => s.replace(/\*\*/g, '')).join('');
-          renderTextLine(processedLine, t.bodySize, 'Helvetica', '#000');
+          const processedLine = line.replace(/\*\*/g, '');
+          renderParagraph(processedLine, t.bodySize, t.font, '#000');
         }
       }
 
-      if (inTable && tableBuffer.length > 0) drawTable(tableBuffer);
+      if (inTable && tableBuffer.length > 0) renderTable(tableBuffer);
 
       // Footer em todas as páginas
       const range = doc.bufferedPageRange();
