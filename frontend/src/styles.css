@@ -757,6 +757,86 @@ form input:focus {
   color: var(--primary-light);
   flex-shrink: 0;
 }
+
+/* ===== Editor de respostas ===== */
+.editable-response {
+  margin-top: 10px;
+}
+
+.edit-textarea {
+  width: 100%;
+  min-height: 100px;
+  max-height: 400px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.edit-textarea:focus {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.response-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--primary);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.save {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.action-btn.save:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.action-btn.cancel {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.action-btn.edit {
+  background: rgba(30, 91, 170, 0.15);
+  border-color: var(--primary);
+  color: var(--primary-light);
+}
+
+.action-btn.edit:hover {
+  background: rgba(30, 91, 170, 0.3);
+}
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;
