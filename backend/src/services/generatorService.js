@@ -54,13 +54,14 @@ export function detectTheme(message) {
 export function detectOptions(message) {
   const lower = message.toLowerCase();
   return {
-    semCapa: /sem capa|sem t[íi]tulo/.test(lower),
-    semCabecalho: /sem cabe[çc]alho|sem header/.test(lower),
-    semRodape: /sem rodape|sem footer/.test(lower),
-    semTabela: /sem tabela|sem tabelas/.test(lower),
+    semCapa: /\bsem\s*capa\b|tirar?\s*capa|tira\s*a\s*capa|remover?\s*capa/.test(lower),
+    semCabecalho: /\bsem\s*cabe[çc]alho\b|tirar?\s*cabe[çc]alho|tira\s*o\s*cabe[çc]alho|remover?\s*cabe[çc]alho|sem\s*header|sem\s*topo/.test(lower),
+    semRodape: /\bsem\s*rodape\b|tirar?\s*rodape|remover?\s*rodape|sem\s*footer/.test(lower),
+    semTabela: /\bsem\s*tabela|tirar?\s*tabela|sem\s*tabelas/.test(lower),
+    semImagem: /\bsem\s*imagem|tirar?\s*imagem|sem\s*gr[áa]fico/.test(lower),
     corPersonalizada: lower.match(/cor\s*([#a-f0-9]{3,6})/i)?.[1],
-    fonteMenor: /fonte\s*(pequena|menor|10|9)/.test(lower),
-    fonteMaior: /fonte\s*(grande|maior|14|16)/.test(lower)
+    fonteMenor: /\bfonte\s*(pequena|menor|10|9)|texto\s*menor/.test(lower),
+    fonteMaior: /\bfonte\s*(grande|maior|14|16)|texto\s*maior/.test(lower)
   };
 }
 
