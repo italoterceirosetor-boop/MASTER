@@ -147,6 +147,65 @@ router.post('/chat', authMiddleware, upload.array('files', 5), async (req, res) 
   }
 });
 
+// Regenera arquivo a partir de texto editado
+router.post('/regenerate', authMiddleware, async (req, res) => {
+  try {
+    const { conversationId, text, fileType, filename } = req.body;
+    const userId = req.userId;
+
+    if (!text) {
+      return res.status(400).json({ error: 'Texto é obrigatório' });
+    }
+
+    // Verifica ownership da conversa
+    const check = await pool.query(
+      'SELECT id FROM conversations WHERE id = $1 AND user_id = $2',
+      [conversationId, userId]
+    );
+    if (check.rows.length === 0) {
+      return res.status(403).json({ error: 'Conversa não encontrada' });
+    }
+
+    // Detecta tipo se não veio
+    const type = fileType || 'pdf';
+    const name = filename || `documento-${Date.now()}`;
+
+    let buffer, mimeType;
+    if (type === 'pdf') {
+      buffer = await generatePDF({ title: name, content: text });
+      mimeType = 'application/pdf';
+    } else if (type === 'docx') {
+      buffer = await generateDOCX({ title: name, content: text });
+      mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    } else if (type === 'xlsx') {
+      buffer = await generateXLSX({ title: name, content: text });
+      mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    } else if (type === 'txt') {
+      buffer = generateTXT({ title: name, content: text });
+      mimeType = 'text/plain';
+    } else {
+      return res.status(400).json({ error: 'Tipo de arquivo inválido' });
+    }
+
+    // Salva no banco
+    const fileResult = await pool.query(
+      `INSERT INTO generated_files (conversation_id, filename, mime_type, content, size)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [conversationId, `${name}.${type}`, mimeType, buffer, buffer.length]
+    );
+
+    res.json({
+      id: fileResult.rows[0].id,
+      filename: `${name}.${type}`,
+      mimeType,
+      size: buffer.length
+    });
+  } catch (err) {
+    console.error('Erro ao regenerar:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
 
 // Download de arquivo gerado pela IA
