@@ -1,19 +1,137 @@
-// Gera PDF, Word e Excel profissionais
+// Gera PDF, Word e Excel profissionais com TEMAS customizáveis
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } from 'docx';
+import {
+  Document, Packer, Paragraph, TextRun, HeadingLevel,
+  AlignmentType, Table, TableRow, TableCell, WidthType,
+  BorderStyle, ShadingType
+} from 'docx';
 
-// ====== PDF PROFISSIONAL ======
-export async function generatePDF({ title, content, author = 'Master IA' }) {
+// ====== TEMAS PRÉ-DEFINIDOS ======
+const THEMES = {
+  executivo: {
+    name: 'Executivo',
+    primaryColor: '#1E3A8A',      // azul escuro
+    accentColor: '#3B82F6',
+    headerBg: '#1E3A8A',
+    titleSize: 16,
+    h1Size: 18,
+    h2Size: 14,
+    bodySize: 11,
+    showCover: true,
+    showHeader: true,
+    showFooter: true,
+    font: 'Helvetica'
+  },
+  clean: {
+    name: 'Clean',
+    primaryColor: '#111827',       // preto suave
+    accentColor: '#6B7280',
+    headerBg: '#F3F4F6',
+    titleSize: 20,
+    h1Size: 16,
+    h2Size: 13,
+    bodySize: 11,
+    showCover: true,
+    showHeader: false,
+    showFooter: true,
+    font: 'Helvetica'
+  },
+  colorido: {
+    name: 'Colorido',
+    primaryColor: '#7C3AED',       // roxo
+    accentColor: '#EC4899',
+    headerBg: '#7C3AED',
+    titleSize: 18,
+    h1Size: 16,
+    h2Size: 13,
+    bodySize: 11,
+    showCover: true,
+    showHeader: true,
+    showFooter: true,
+    font: 'Helvetica'
+  },
+  minimalista: {
+    name: 'Minimalista',
+    primaryColor: '#000000',
+    accentColor: '#666666',
+    headerBg: '#FFFFFF',
+    titleSize: 14,
+    h1Size: 13,
+    h2Size: 12,
+    bodySize: 10,
+    showCover: false,
+    showHeader: false,
+    showFooter: false,
+    font: 'Helvetica'
+  },
+  formal: {
+    name: 'Formal',
+    primaryColor: '#0F172A',       // navy
+    accentColor: '#475569',
+    headerBg: '#0F172A',
+    titleSize: 18,
+    h1Size: 16,
+    h2Size: 13,
+    bodySize: 11,
+    showCover: true,
+    showHeader: true,
+    showFooter: true,
+    font: 'Times-Roman'
+  }
+};
+
+// Detecta tema pedido pelo usuário
+export function detectTheme(message) {
+  const lower = message.toLowerCase();
+  if (/executiv|profissional|corporativ/.test(lower)) return 'executivo';
+  if (/clean|limpo|simples|m[íi]nimo/.test(lower)) return 'clean';
+  if (/color|roxo|rosa|colorido|vibrante/.test(lower)) return 'colorido';
+  if (/minimal|s[óo] texto|sem cabe[çc]alho/.test(lower)) return 'minimalista';
+  if (/formal|serif|times|cl[áa]ssico|tradicional/.test(lower)) return 'formal';
+  return 'executivo'; // padrão
+}
+
+// Detecta opções extras
+export function detectOptions(message) {
+  const lower = message.toLowerCase();
+  return {
+    semCapa: /sem capa|sem t[íi]tulo/.test(lower),
+    semCabecalho: /sem cabe[çc]alho|sem header/.test(lower),
+    semRodape: /sem rodape|sem footer/.test(lower),
+    umaPagina: /uma p[áa]gina|s[óo] uma|single page/.test(lower),
+    semTabela: /sem tabela|sem tabelas/.test(lower),
+    semImagem: /sem imagem|sem gr[áa]fico/.test(lower),
+    corPersonalizada: lower.match(/cor\s*([#a-f0-9]{3,6})/i)?.[1],
+    fonteMenor: /fonte\s*(pequena|menor|10|9)/.test(lower),
+    fonteMaior: /fonte\s*(grande|maior|14|16)/.test(lower)
+  };
+}
+
+// ====== PDF PROFISSIONAL COM TEMAS ======
+export async function generatePDF({ title, content, theme = 'executivo', options = {} }) {
+  const t = { ...THEMES[theme] || THEMES.executivo };
+
+  // Aplica overrides
+  if (options.corPersonalizada) {
+    t.primaryColor = options.corPersonalizada.startsWith('#') ? options.corPersonalizada : '#' + options.corPersonalizada;
+    t.headerBg = t.primaryColor;
+  }
+  if (options.fonteMenor) t.bodySize = Math.max(9, t.bodySize - 2);
+  if (options.fonteMaior) t.bodySize = Math.min(14, t.bodySize + 2);
+  if (options.semCapa) t.showCover = false;
+  if (options.semCabecalho) t.showHeader = false;
+  if (options.semRodape) t.showFooter = false;
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 60, bottom: 60, left: 60, right: 60 },
+        margins: { top: 70, bottom: 70, left: 70, right: 70 },
+        bufferPages: true,
         info: {
           Title: title,
-          Author: author,
-          Subject: 'Gerado por Master IA',
+          Author: 'Master IA',
           Creator: 'Master IA'
         }
       });
@@ -23,117 +141,254 @@ export async function generatePDF({ title, content, author = 'Master IA' }) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Cabeçalho
-      doc.fillColor('#1E5BAA')
-         .fontSize(20)
-         .font('Helvetica-Bold')
-         .text('Master IA', { align: 'left' });
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const marginLeft = 70;
+      const marginRight = 70;
+      const contentWidth = pageWidth - marginLeft - marginRight;
+      const marginTop = 70;
+      const marginBottom = 70;
 
-      doc.fontSize(10)
-         .fillColor('#666')
-         .font('Helvetica')
-         .text('Master Contabilidade & Consultoria', { align: 'left' });
-
-      doc.moveDown(0.5);
-
-      // Linha divisória
-      doc.strokeColor('#1E5BAA')
-         .lineWidth(2)
-         .moveTo(60, doc.y)
-         .lineTo(535, doc.y)
-         .stroke();
-
-      doc.moveDown(1);
-
-      // Título do documento
-      doc.fillColor('#000')
-         .fontSize(16)
-         .font('Helvetica-Bold')
-         .text(title);
-
-      doc.moveDown(0.5);
-
-      // Data
-      doc.fontSize(9)
-         .fillColor('#888')
-         .font('Helvetica')
-         .text(`Gerado em ${new Date().toLocaleString('pt-BR')}`);
-
-      doc.moveDown(1.5);
-
-      // Conteúdo — processa markdown básico
-      doc.fillColor('#000').fontSize(11).font('Helvetica');
-
-      const lines = content.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('# ')) {
-          doc.moveDown(0.5);
-          doc.fontSize(15).font('Helvetica-Bold').fillColor('#1E5BAA');
-          doc.text(line.substring(2));
-          doc.fontSize(11).font('Helvetica').fillColor('#000');
-          doc.moveDown(0.5);
-        } else if (line.startsWith('## ')) {
-          doc.moveDown(0.5);
-          doc.fontSize(13).font('Helvetica-Bold').fillColor('#1E5BAA');
-          doc.text(line.substring(3));
-          doc.fontSize(11).font('Helvetica').fillColor('#000');
-          doc.moveDown(0.3);
-        } else if (line.startsWith('### ')) {
-          doc.moveDown(0.3);
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#333');
-          doc.text(line.substring(4));
-          doc.fontSize(11).font('Helvetica').fillColor('#000');
-        } else if (line.startsWith('- ') || line.startsWith('* ')) {
-          doc.text(`• ${line.substring(2)}`, { indent: 20, align: 'left' });
-        } else if (/^\d+\.\s/.test(line)) {
-          doc.text(line, { indent: 20, align: 'left' });
-        } else if (line.trim() === '---') {
-          doc.moveDown(0.3);
-          doc.strokeColor('#CCCCCC').lineWidth(0.5)
-             .moveTo(100, doc.y).lineTo(495, doc.y).stroke();
-          doc.moveDown(0.3);
-        } else if (line.startsWith('> ')) {
-          doc.fillColor('#555').font('Helvetica-Oblique')
-             .text(line.substring(2), { indent: 40, align: 'left' });
-          doc.fillColor('#000').font('Helvetica');
-        } else if (line.trim() === '') {
-          doc.moveDown(0.5);
-        } else if (line.startsWith('|')) {
-          doc.font('Courier').fontSize(9).fillColor('#444').text(line, { align: 'left' });
-          doc.font('Helvetica').fontSize(11).fillColor('#000');
-        } else {
-          // Negrito inline
-          const parts = line.split(/(\*\*[^*]+\*\*)/g);
-          let isFirst = true;
-          for (const part of parts) {
-            if (part.startsWith('**') && part.endsWith('**')) {
-              doc.font('Helvetica-Bold').fillColor('#000').text(part.slice(2, -2), { continued: !isFirst, align: 'left' });
-            } else if (part) {
-              doc.font('Helvetica').fillColor('#000').text(part, { continued: !isFirst, align: 'left' });
-            }
-            isFirst = false;
-          }
-          doc.text('', { align: 'left' });
-        }
-      }
-
-      // Rodapé
-      const range = doc.bufferedPageRange();
-      for (let i = range.start; i < range.start + range.count; i++) {
-        doc.switchToPage(i);
-
-        // Linha do rodapé
-        doc.strokeColor('#ddd').lineWidth(0.5)
-           .moveTo(60, doc.page.height - 50)
-           .lineTo(535, doc.page.height - 50)
-           .stroke();
+      function addHeader() {
+        if (!t.showHeader) return;
+        doc.save();
+        doc.fillColor(t.primaryColor)
+           .fontSize(11)
+           .font('Helvetica-Bold')
+           .text('Master IA', marginLeft, 30);
 
         doc.fontSize(8)
            .fillColor('#888')
            .font('Helvetica')
-           .text('Master IA — Master Contabilidade & Consultoria', 60, doc.page.height - 40, { align: 'left' });
+           .text('Master Contabilidade & Consultoria', marginLeft, 45);
 
-        doc.text(`Página ${i - range.start + 1} de ${range.count}`, 60, doc.page.height - 40, { align: 'right', width: 475 });
+        doc.strokeColor(t.primaryColor)
+           .lineWidth(1)
+           .moveTo(marginLeft, 60)
+           .lineTo(pageWidth - marginRight, 60)
+           .stroke();
+        doc.restore();
+      }
+
+      function addFooter(pageNum, totalPages) {
+        if (!t.showFooter) return;
+        const footerY = pageHeight - 40;
+        doc.save();
+        doc.fontSize(8).fillColor('#888').font('Helvetica');
+        doc.text('Master IA — Documento gerado automaticamente', marginLeft, footerY);
+        doc.text(`Página ${pageNum} de ${totalPages}`, marginLeft, footerY, {
+          width: contentWidth, align: 'right'
+        });
+        doc.restore();
+      }
+
+      // CAPA
+      if (t.showCover) {
+        doc.fillColor(t.primaryColor).fontSize(40).font('Helvetica-Bold')
+           .text('Master IA', marginLeft, 200);
+        doc.fontSize(14).fillColor('#666').font('Helvetica')
+           .text('Master Contabilidade & Consultoria', marginLeft, 250);
+
+        doc.strokeColor(t.primaryColor).lineWidth(3)
+           .moveTo(marginLeft, 290).lineTo(pageWidth - marginRight, 290).stroke();
+
+        doc.fillColor('#000').fontSize(28).font('Helvetica-Bold')
+           .text(title, marginLeft, 360, { width: contentWidth, align: 'center' });
+
+        doc.fontSize(11).fillColor('#666').font('Helvetica-Oblique')
+           .text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, marginLeft, 470, {
+             width: contentWidth, align: 'center'
+           });
+
+        doc.addPage();
+        addHeader();
+      }
+
+      let cursorY = t.showCover ? 80 : 50;
+
+      function ensureSpace(neededHeight) {
+        if (cursorY + neededHeight > pageHeight - marginBottom) {
+          doc.addPage();
+          addHeader();
+          cursorY = 80;
+        }
+      }
+
+      function drawTable(rows) {
+        if (rows.length === 0) return;
+        if (options.semTabela) return;
+
+        const parsed = rows
+          .filter(r => !r.includes('---'))
+          .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+
+        if (parsed.length === 0) return;
+
+        const colCount = parsed[0].length;
+        const colWidth = contentWidth / colCount;
+        const rowHeight = 24;
+        const cellPadding = 6;
+
+        const header = parsed[0];
+
+        ensureSpace(rowHeight);
+
+        doc.save();
+        doc.rect(marginLeft, cursorY, contentWidth, rowHeight).fillColor(t.headerBg).fill();
+        doc.restore();
+
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
+        header.forEach((cellText, i) => {
+          const x = marginLeft + (i * colWidth) + cellPadding;
+          doc.text(cellText || '', x, cursorY + 6, {
+            width: colWidth - (cellPadding * 2),
+            align: 'center', ellipsis: true, height: rowHeight - 6
+          });
+        });
+        cursorY += rowHeight;
+
+        doc.fillColor('#000').font('Helvetica').fontSize(9);
+
+        for (let r = 1; r < parsed.length; r++) {
+          ensureSpace(rowHeight);
+
+          if (r % 2 === 0) {
+            doc.save();
+            doc.rect(marginLeft, cursorY, contentWidth, rowHeight).fillColor('#F8FAFC').fill();
+            doc.restore();
+          }
+
+          doc.strokeColor('#E2E8F0').lineWidth(0.5)
+             .moveTo(marginLeft, cursorY + rowHeight)
+             .lineTo(marginLeft + contentWidth, cursorY + rowHeight).stroke();
+
+          parsed[r].forEach((cellText, i) => {
+            const x = marginLeft + (i * colWidth) + cellPadding;
+            const cleanText = (cellText || '').replace(/\*\*/g, '');
+            doc.fillColor('#000').text(cleanText, x, cursorY + 6, {
+              width: colWidth - (cellPadding * 2),
+              align: i === 0 ? 'left' : 'center', ellipsis: true, height: rowHeight - 6
+            });
+          });
+          cursorY += rowHeight;
+        }
+
+        cursorY += 15;
+      }
+
+      // Processa conteúdo
+      const lines = content.split('\n');
+      let inCodeBlock = false, codeBuffer = [];
+      let tableBuffer = [], inTable = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('```')) {
+          if (!inCodeBlock) {
+            inCodeBlock = true; codeBuffer = []; continue;
+          } else {
+            const codeHeight = codeBuffer.length * 12 + 20;
+            ensureSpace(codeHeight);
+            doc.save();
+            doc.rect(marginLeft, cursorY, contentWidth, codeHeight).fillColor('#0d1117').fill();
+            doc.restore();
+            doc.fontSize(9).fillColor('#E6EDF3').font('Courier')
+               .text(codeBuffer.join('\n'), marginLeft + 10, cursorY + 8, { width: contentWidth - 20 });
+            doc.font(t.font).fillColor('#000').fontSize(t.bodySize);
+            cursorY += codeHeight + 10;
+            inCodeBlock = false; codeBuffer = []; continue;
+          }
+        }
+        if (inCodeBlock) { codeBuffer.push(line); continue; }
+
+        if (line.startsWith('|') && line.endsWith('|')) {
+          tableBuffer.push(line); inTable = true; continue;
+        } else if (inTable && tableBuffer.length > 0) {
+          drawTable(tableBuffer);
+          tableBuffer = []; inTable = false;
+        }
+
+        if (line.startsWith('# ')) {
+          ensureSpace(40); cursorY += 10;
+          doc.fontSize(t.h1Size + 4).font('Helvetica-Bold').fillColor(t.primaryColor);
+          doc.text(line.substring(2), marginLeft, cursorY, { width: contentWidth });
+          cursorY = doc.y + 12;
+        }
+        else if (line.startsWith('## ')) {
+          ensureSpace(32); cursorY += 8;
+          doc.fontSize(t.h2Size + 2).font('Helvetica-Bold').fillColor(t.primaryColor);
+          doc.text(line.substring(3), marginLeft, cursorY, { width: contentWidth });
+          cursorY = doc.y + 8;
+        }
+        else if (line.startsWith('### ')) {
+          ensureSpace(26); cursorY += 6;
+          doc.fontSize(t.h2Size).font('Helvetica-Bold').fillColor('#333');
+          doc.text(line.substring(4), marginLeft, cursorY, { width: contentWidth });
+          cursorY = doc.y + 6;
+        }
+        else if (trimmed === '---') {
+          ensureSpace(15); cursorY += 5;
+          doc.strokeColor('#CCCCCC').lineWidth(0.5)
+             .moveTo(marginLeft, cursorY).lineTo(marginLeft + contentWidth, cursorY).stroke();
+          cursorY += 10;
+        }
+        else if (line.startsWith('> ')) {
+          ensureSpace(30);
+          doc.fontSize(t.bodySize).font('Helvetica-Oblique').fillColor('#555');
+          doc.text(line.substring(2).replace(/\*\*/g, ''), marginLeft + 20, cursorY, {
+            width: contentWidth - 20, align: 'left'
+          });
+          cursorY = doc.y + 6;
+          doc.font(t.font).fillColor('#000');
+        }
+        else if (line.startsWith('- ') || line.startsWith('* ')) {
+          ensureSpace(20);
+          doc.fontSize(t.bodySize).font('Helvetica').fillColor(t.accentColor);
+          doc.text('•', marginLeft + 5, cursorY);
+          doc.fillColor('#000').text(line.substring(2).replace(/\*\*/g, ''), marginLeft + 20, cursorY, {
+            width: contentWidth - 20, align: 'left'
+          });
+          cursorY = doc.y + 4;
+        }
+        else if (/^\d+\.\s/.test(line)) {
+          ensureSpace(20);
+          const match = line.match(/^(\d+)\.\s(.*)$/);
+          doc.fontSize(t.bodySize).font('Helvetica-Bold').fillColor(t.primaryColor);
+          doc.text(`${match[1]}.`, marginLeft + 5, cursorY);
+          doc.font(t.font).fillColor('#000');
+          doc.text(match[2].replace(/\*\*/g, ''), marginLeft + 25, cursorY, {
+            width: contentWidth - 25, align: 'left'
+          });
+          cursorY = doc.y + 4;
+        }
+        else if (trimmed === '') cursorY += 8;
+        else {
+          ensureSpace(30);
+          const segments = line.split(/(\*\*[^*]+\*\*)/g);
+          for (const seg of segments) {
+            if (!seg) continue;
+            if (seg.startsWith('**') && seg.endsWith('**')) {
+              doc.fontSize(t.bodySize).font('Helvetica-Bold').fillColor('#000')
+                 .text(seg.slice(2, -2), marginLeft, cursorY, { width: contentWidth, align: 'left', continued: false });
+            } else {
+              doc.fontSize(t.bodySize).font(t.font).fillColor('#000')
+                 .text(seg, marginLeft, cursorY, { width: contentWidth, align: 'left', continued: false });
+            }
+          }
+          cursorY = doc.y + 6;
+        }
+      }
+
+      if (inTable && tableBuffer.length > 0) drawTable(tableBuffer);
+
+      // Footer em todas as páginas
+      const range = doc.bufferedPageRange();
+      const totalPages = range.count;
+      for (let i = range.start; i < range.start + totalPages; i++) {
+        doc.switchToPage(i);
+        addFooter(i - range.start + 1, totalPages);
       }
 
       doc.end();
@@ -143,156 +398,143 @@ export async function generatePDF({ title, content, author = 'Master IA' }) {
   });
 }
 
-// ====== WORD (DOCX) ======
-export async function generateDOCX({ title, content }) {
+// ====== WORD PROFISSIONAL COM TEMAS ======
+export async function generateDOCX({ title, content, theme = 'executivo', options = {} }) {
+  const t = { ...THEMES[theme] || THEMES.executivo };
+  const primaryRGB = hexToDocxColor(t.primaryColor);
+  const accentRGB = hexToDocxColor(t.accentColor);
+
   const lines = content.split('\n');
   const children = [];
 
-  // Capa com título centralizado
-  children.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 200, after: 100 },
-      children: [
-        new TextRun({ text: 'Master IA', size: 28, bold: true, color: '1E5BAA' })
-      ]
-    }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
-      children: [
-        new TextRun({ text: 'Master Contabilidade & Consultoria', size: 18, italics: true, color: '666666' })
-      ]
-    }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-      children: [
-        new TextRun({ text: '—'.repeat(30), color: '1E5BAA' })
-      ]
-    }),
-    // Título do documento
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 200, after: 100 },
-      children: [
-        new TextRun({ text: title, size: 32, bold: true })
-      ]
-    }),
-    // Data
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-      children: [
-        new TextRun({ text: `Gerado em ${new Date().toLocaleString('pt-BR')}`, size: 18, italics: true, color: '888888' })
-      ]
-    }),
-    new Paragraph({ text: '' }) // espaço
-  );
+  if (t.showCover) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { before: 1500, after: 100 },
+        children: [new TextRun({ text: 'Master IA', size: 56, bold: true, color: primaryRGB })]
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { after: 100 },
+        children: [new TextRun({ text: 'Master Contabilidade & Consultoria', size: 24, italics: true, color: '666666' })]
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { after: 800 },
+        children: [new TextRun({ text: '━'.repeat(30), color: primaryRGB })]
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { before: 800, after: 100 },
+        children: [new TextRun({ text: title, size: 48, bold: true })]
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { after: 800 },
+        children: [new TextRun({ text: `Gerado em ${new Date().toLocaleString('pt-BR')}`, size: 22, italics: true, color: '888888' })]
+      }),
+      new Paragraph({ text: '', pageBreakBefore: true })
+    );
+  }
 
-  // Processa cada linha do conteúdo
+  let tableBuffer = [];
+
+  function flushTable() {
+    if (tableBuffer.length === 0 || options.semTabela) return;
+    const parsed = tableBuffer.filter(r => !r.match(/^\|[\s\-|]+\|$/))
+      .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+    if (parsed.length === 0) { tableBuffer = []; return; }
+
+    const headerRow = new TableRow({
+      tableHeader: true,
+      children: parsed[0].map(cellText => new TableCell({
+        shading: { fill: t.primaryColor.replace('#', ''), type: ShadingType.SOLID, color: 'auto' },
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: cellText, bold: true, color: 'FFFFFF', size: 22 })]
+        })]
+      }))
+    });
+
+    const dataRows = parsed.slice(1).map((row, idx) => new TableRow({
+      children: row.map(cellText => new TableCell({
+        shading: idx % 2 === 0 ? { fill: 'F8FAFC', type: ShadingType.SOLID, color: 'auto' } : undefined,
+        children: [new Paragraph({ children: [new TextRun({ text: cellText.replace(/\*\*/g, ''), size: 22 })] })]
+      }))
+    }));
+
+    children.push(new Table({
+      rows: [headerRow, ...dataRows],
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
+        left: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
+        right: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 2, color: 'E2E8F0' },
+        insideVertical: { style: BorderStyle.SINGLE, size: 2, color: 'E2E8F0' }
+      }
+    }));
+    children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+    tableBuffer = [];
+  }
+
   for (const line of lines) {
-    const trimmed = line.trim();
+    if (line.startsWith('|') && line.endsWith('|')) {
+      tableBuffer.push(line); continue;
+    } else if (tableBuffer.length > 0) flushTable();
 
-    // Linha vazia
-    if (trimmed === '') {
-      children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
-      continue;
-    }
-
-    // Títulos
-    if (line.startsWith('### ')) {
+    if (line.startsWith('# ')) {
       children.push(new Paragraph({
-        text: line.substring(4),
-        heading: HeadingLevel.HEADING_3,
-        spacing: { before: 200, after: 100 }
+        children: [new TextRun({ text: line.substring(2), size: 40, bold: true, color: primaryRGB })],
+        spacing: { before: 400, after: 200 }
       }));
     } else if (line.startsWith('## ')) {
       children.push(new Paragraph({
-        text: line.substring(3),
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 300, after: 120 }
+        children: [new TextRun({ text: line.substring(3), size: 32, bold: true, color: primaryRGB })],
+        spacing: { before: 300, after: 150 }
       }));
-    } else if (line.startsWith('# ')) {
+    } else if (line.startsWith('### ')) {
       children.push(new Paragraph({
-        text: line.substring(2),
-        heading: HeadingLevel.HEADING_1,
-        spacing: { before: 400, after: 150 }
+        children: [new TextRun({ text: line.substring(4), size: 26, bold: true, color: '333333' })],
+        spacing: { before: 250, after: 120 }
       }));
-    }
-    // Tabela markdown
-    else if (line.startsWith('|') && line.endsWith('|') && !line.includes('---')) {
-      const cells = line.split('|').slice(1, -1).map(c => c.trim());
-      const tableRows = [];
-
-      tableRows.push(new TableRow({
-        children: cells.map(cellText => new TableCell({
-          shading: { fill: '1E5BAA' },
-          children: [new Paragraph({
-            children: [new TextRun({ text: cellText, bold: true, color: 'FFFFFF' })],
-            alignment: AlignmentType.CENTER
-          })]
-        }))
-      }));
-
-      children.push(new Table({
-        rows: tableRows,
-        width: { size: 100, type: WidthType.PERCENTAGE }
-      }));
-      children.push(new Paragraph({ text: '' }));
-    }
-    // Lista com bullet
-    else if (line.startsWith('- ') || line.startsWith('* ')) {
+    } else if (line.trim() === '---') {
       children.push(new Paragraph({
-        text: line.substring(2),
-        bullet: { level: 0 },
-        spacing: { after: 60 }
+        alignment: AlignmentType.CENTER, spacing: { before: 200, after: 200 },
+        children: [new TextRun({ text: '━'.repeat(40), color: 'CCCCCC' })]
       }));
-    }
-    // Linha separadora
-    else if (line.trim() === '---') {
+    } else if (line.startsWith('> ')) {
       children.push(new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { before: 200, after: 200 },
-        children: [new TextRun({ text: '—'.repeat(40), color: 'CCCCCC' })]
+        indent: { left: 720 }, spacing: { before: 100, after: 100 },
+        children: [new TextRun({ text: line.substring(2), italics: true, color: '555555', size: 22 })]
       }));
-    }
-    // Citação
-    else if (line.startsWith('> ')) {
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
       children.push(new Paragraph({
-        text: line.substring(2),
-        spacing: { before: 100, after: 100, left: 400 },
-        indent: { left: 400 },
-        children: [new TextRun({ text: line.substring(2), italics: true, color: '555555' })]
+        children: parseInlineMarkdown(line.substring(2)),
+        bullet: { level: 0 }, spacing: { after: 80 }
       }));
-    }
-    // Linha normal com markdown inline (negrito)
-    else {
-      const runs = parseInlineMarkdown(line);
+    } else if (/^\d+\.\s/.test(line)) {
+      const match = line.match(/^(\d+)\.\s(.*)$/);
       children.push(new Paragraph({
-        children: runs,
-        spacing: { after: 120 }
+        children: [
+          new TextRun({ text: `${match[1]}. `, bold: true, color: primaryRGB }),
+          ...parseInlineMarkdown(match[2])
+        ],
+        spacing: { after: 80 }, indent: { left: 360 }
+      }));
+    } else if (line.trim() === '') {
+      children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
+    } else {
+      children.push(new Paragraph({
+        children: parseInlineMarkdown(line),
+        spacing: { after: 140 }, alignment: AlignmentType.JUSTIFIED
       }));
     }
   }
+  if (tableBuffer.length > 0) flushTable();
 
   const doc = new Document({
-    creator: 'Master IA',
-    title: title,
-    description: 'Documento gerado por Master IA',
-    styles: {
-      default: {
-        document: {
-          run: { font: 'Calibri', size: 22 } // 11pt
-        }
-      }
-    },
+    creator: 'Master IA', title,
+    styles: { default: { document: { run: { font: 'Calibri', size: 22 } } } },
     sections: [{
-      properties: {
-        page: {
-          margin: { top: 1000, right: 1000, bottom: 1000, left: 1000 } // margens em twips
-        }
-      },
+      properties: { page: { margin: { top: 1000, right: 1000, bottom: 1000, left: 1000 } } },
       children
     }]
   });
@@ -300,226 +542,119 @@ export async function generateDOCX({ title, content }) {
   return await Packer.toBuffer(doc);
 }
 
-// Parseia markdown inline (negrito, itálico, código) e retorna array de TextRun
-function parseInlineMarkdown(text) {
-  const runs = [];
-  // Regex pra capturar **bold**, *italic*, `code`
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
-  const parts = text.split(regex);
-
-  for (const part of parts) {
-    if (!part) continue;
-
-    if (part.startsWith('**') && part.endsWith('**')) {
-      runs.push(new TextRun({ text: part.slice(2, -2), bold: true }));
-    } else if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-      runs.push(new TextRun({ text: part.slice(1, -1), italics: true }));
-    } else if (part.startsWith('`') && part.endsWith('`')) {
-      runs.push(new TextRun({
-        text: part.slice(1, -1),
-        font: 'Consolas',
-        color: 'C7254E',
-        shading: { fill: 'F9F2F4' }
-      }));
-    } else {
-      runs.push(new TextRun({ text: part }));
-    }
-  }
-
-  return runs;
+// Helper: converte hex pra cor Word
+function hexToDocxColor(hex) {
+  return hex.replace('#', '').toUpperCase();
 }
 
 // ====== EXCEL ======
-export async function generateXLSX({ title, content, structuredData }) {
+export async function generateXLSX({ title, content }) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Master IA';
-  workbook.created = new Date();
 
-  // Se tiver dados estruturados (tabela), cria planilha profissional
-  if (structuredData && structuredData.headers && structuredData.rows) {
+  const tableMatch = content.match(/(\|.*\|[\s\S]*?\n)+/);
+
+  if (tableMatch) {
     const sheet = workbook.addWorksheet(title.substring(0, 30));
+    const tableLines = content.split('\n').filter(l => l.startsWith('|') && l.endsWith('|'));
+    const parsed = tableLines.filter(r => !r.match(/^\|[\s\-|]+\|$/))
+      .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
 
-    // Título
-    sheet.mergeCells('A1:' + String.fromCharCode(64 + structuredData.headers.length) + '1');
-    const titleCell = sheet.getCell('A1');
-    titleCell.value = title;
-    titleCell.font = { size: 16, bold: true, color: { argb: 'FF1E5BAA' } };
-    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
-    sheet.getRow(1).height = 35;
+    if (parsed.length > 0) {
+      sheet.mergeCells('A1:' + String.fromCharCode(64 + parsed[0].length) + '1');
+      const tc = sheet.getCell('A1');
+      tc.value = title;
+      tc.font = { size: 16, bold: true, color: { argb: 'FF1E5BAA' } };
+      tc.alignment = { horizontal: 'center', vertical: 'middle' };
+      tc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+      sheet.getRow(1).height = 35;
 
-    // Data de geração
-    sheet.mergeCells('A2:' + String.fromCharCode(64 + structuredData.headers.length) + '2');
-    const dateCell = sheet.getCell('A2');
-    dateCell.value = `Gerado em ${new Date().toLocaleString('pt-BR')}`;
-    dateCell.font = { size: 9, italic: true, color: { argb: 'FF888888' } };
-    dateCell.alignment = { horizontal: 'center' };
-
-    // Cabeçalhos (linha 4)
-    const headerRow = sheet.getRow(4);
-    structuredData.headers.forEach((header, i) => {
-      const cell = headerRow.getCell(i + 1);
-      cell.value = header;
-      cell.font = { size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E5BAA' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FF1E5BAA' } },
-        bottom: { style: 'thin', color: { argb: 'FF1E5BAA' } },
-        left: { style: 'thin', color: { argb: 'FF1E5BAA' } },
-        right: { style: 'thin', color: { argb: 'FF1E5BAA' } }
-      };
-    });
-    headerRow.height = 25;
-
-    // Dados
-    structuredData.rows.forEach((row, rowIdx) => {
-      const dataRow = sheet.getRow(5 + rowIdx);
-      const bgColor = rowIdx % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF';
-
-      row.forEach((value, colIdx) => {
-        const cell = dataRow.getCell(colIdx + 1);
-        cell.value = value;
-        cell.font = { size: 11 };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-        cell.alignment = { horizontal: colIdx === 0 ? 'left' : 'center', vertical: 'middle', wrapText: true };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-        };
+      const headerRow = sheet.getRow(4);
+      parsed[0].forEach((h, i) => {
+        const c = headerRow.getCell(i + 1);
+        c.value = h;
+        c.font = { size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E5BAA' } };
+        c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        c.border = { top: { style: 'thin' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } };
       });
-      dataRow.height = 22;
-    });
+      headerRow.height = 30;
 
-    // Auto-ajustar largura das colunas
-    structuredData.headers.forEach((header, i) => {
-      const col = sheet.getColumn(i + 1);
-      const maxLength = Math.max(
-        header.length,
-        ...structuredData.rows.map(row => String(row[i] || '').length)
-      );
-      col.width = Math.min(Math.max(maxLength + 4, 15), 50);
-    });
+      parsed.slice(1).forEach((row, ri) => {
+        const dr = sheet.getRow(5 + ri);
+        row.forEach((v, ci) => {
+          const c = dr.getCell(ci + 1);
+          c.value = v.replace(/\*\*/g, '');
+          c.font = { size: 11 };
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ri % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF' } };
+          c.alignment = { horizontal: ci === 0 ? 'left' : 'center', vertical: 'middle', wrapText: true };
+          c.border = { top: { style: 'thin', color: { argb: 'FFE2E8F0' } }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+        });
+        dr.height = 24;
+      });
 
-    // Filtro automático
-    sheet.autoFilter = {
-      from: { row: 4, column: 1 },
-      to: { row: 4 + structuredData.rows.length, column: structuredData.headers.length }
-    };
+      parsed[0].forEach((h, i) => {
+        const col = sheet.getColumn(i + 1);
+        col.width = Math.min(Math.max(h.length + 4, 15), 50);
+      });
 
-    // Congelar cabeçalho
-    sheet.views = [{ state: 'frozen', ySplit: 4 }];
+      sheet.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + parsed.length - 1, column: parsed[0].length } };
+      sheet.views = [{ state: 'frozen', ySplit: 4 }];
 
-    return await workbook.xlsx.writeBuffer();
+      return await workbook.xlsx.writeBuffer();
+    }
   }
 
-  // Fallback: planilha simples baseada em texto/markdown
   return await generateSimpleXLSX(workbook, title, content);
 }
 
 async function generateSimpleXLSX(workbook, title, content) {
   const sheet = workbook.addWorksheet(title.substring(0, 30));
-
-  // Título
   sheet.mergeCells('A1:D1');
-  const titleCell = sheet.getCell('A1');
-  titleCell.value = title;
-  titleCell.font = { size: 16, bold: true, color: { argb: 'FF1E5BAA' } };
-  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  const tc = sheet.getCell('A1');
+  tc.value = title;
+  tc.font = { size: 16, bold: true, color: { argb: 'FF1E5BAA' } };
+  tc.alignment = { horizontal: 'center', vertical: 'middle' };
   sheet.getRow(1).height = 30;
 
-  // Tenta parsear tabelas markdown do conteúdo
-  const lines = content.split('\n');
   let row = 3;
-
-  for (const line of lines) {
-    // Detecta linha de tabela markdown (começa com |)
-    if (line.startsWith('|') && line.endsWith('|') && !line.includes('---')) {
-      const cells = line.split('|').slice(1, -1).map(c => c.trim());
-      cells.forEach((cellText, i) => {
-        const cell = sheet.getCell(row, i + 1);
-        cell.value = cellText;
-        cell.font = { size: 11, bold: row === 3 };
-        if (row === 3) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E5BAA' } };
-          cell.font = { size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-        } else {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF' } };
-        }
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-        };
-      });
-      sheet.getRow(row).height = 22;
-      row++;
-    } else if (line.startsWith('# ') || line.startsWith('## ') || line.startsWith('### ')) {
-      const cleanText = line.replace(/^#+\s/, '');
+  for (const line of content.split('\n')) {
+    if (line.startsWith('#')) {
       sheet.mergeCells(`A${row}:D${row}`);
-      const cell = sheet.getCell(`A${row}`);
-      cell.value = cleanText;
-      cell.font = { size: 14, bold: true, color: { argb: 'FF1E5BAA' } };
+      sheet.getCell(`A${row}`).value = line.replace(/^#+\s/, '');
+      sheet.getCell(`A${row}`).font = { size: 14, bold: true, color: { argb: 'FF1E5BAA' } };
       sheet.getRow(row).height = 24;
-      row++;
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      sheet.getCell(`A${row}`).value = '• ' + line.substring(2);
-      sheet.getCell(`A${row}`).font = { size: 11 };
-      row++;
     } else if (line.trim() !== '') {
       sheet.mergeCells(`A${row}:D${row}`);
       sheet.getCell(`A${row}`).value = line.replace(/\*\*/g, '');
-      sheet.getCell(`A${row}`).font = { size: 11 };
-      row++;
-    } else {
-      row++;
     }
+    row++;
   }
 
-  // Largura das colunas
   sheet.getColumn(1).width = 40;
-  sheet.getColumn(2).width = 30;
-  sheet.getColumn(3).width = 20;
-  sheet.getColumn(4).width = 20;
-
   return await workbook.xlsx.writeBuffer();
 }
 
 // ====== TXT ======
 export function generateTXT({ title, content }) {
-  const header = `${title}\n${'='.repeat(title.length)}\nGerado em ${new Date().toLocaleString('pt-BR')}\n\n`;
-  return Buffer.from(header + content, 'utf-8');
+  return Buffer.from(`${title}\n${'='.repeat(title.length)}\nGerado em ${new Date().toLocaleString('pt-BR')}\n\n${content}`, 'utf-8');
 }
 
-// Detecta marcadores de geração na resposta da IA
-// Formato: [GERAR_PDF:nome-do-arquivo] conteúdo aqui
 export function parseGenerationMarkers(text) {
   const markers = [];
-  const cleanedText = text;
-
   const patterns = [
     { regex: /\[GERAR_PDF:([^\]]+)\]([\s\S]*?)\[FIM_PDF\]/g, type: 'pdf' },
     { regex: /\[GERAR_DOCX:([^\]]+)\]([\s\S]*?)\[FIM_DOCX\]/g, type: 'docx' },
     { regex: /\[GERAR_XLSX:([^\]]+)\]([\s\S]*?)\[FIM_XLSX\]/g, type: 'xlsx' },
     { regex: /\[GERAR_TXT:([^\]]+)\]([\s\S]*?)\[FIM_TXT\]/g, type: 'txt' }
   ];
-
   let cleanText = text;
   for (const pattern of patterns) {
     let match;
     while ((match = pattern.regex.exec(text)) !== null) {
-      markers.push({
-        type: pattern.type,
-        filename: match[1].trim(),
-        content: match[2].trim()
-      });
+      markers.push({ type: pattern.type, filename: match[1].trim(), content: match[2].trim() });
     }
     cleanText = cleanText.replace(pattern.regex, '');
   }
-
   return { cleanText: cleanText.trim(), markers };
 }
