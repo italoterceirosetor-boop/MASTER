@@ -157,7 +157,6 @@ router.post('/regenerate', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Texto é obrigatório' });
     }
 
-    // Verifica ownership da conversa
     const check = await pool.query(
       'SELECT id FROM conversations WHERE id = $1 AND user_id = $2',
       [conversationId, userId]
@@ -166,7 +165,6 @@ router.post('/regenerate', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Conversa não encontrada' });
     }
 
-    // Detecta tipo se não veio
     const type = fileType || 'pdf';
     const name = filename || `documento-${Date.now()}`;
 
@@ -187,7 +185,6 @@ router.post('/regenerate', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Tipo de arquivo inválido' });
     }
 
-    // Salva no banco
     const fileResult = await pool.query(
       `INSERT INTO generated_files (conversation_id, filename, mime_type, content, size)
        VALUES ($1, $2, $3, $4, $5) RETURNING id`,
