@@ -83,39 +83,40 @@ export async function chatWithAI(messages, userMessage) {
 - Quando usar dados de busca, cite a fonte
 
 **GERAÇÃO DE ARQUIVOS (MUITO IMPORTANTE):**
-Quando o usuário pedir QUALQUER arquivo (PDF, Word, Excel, TXT), você DEVE gerar o conteúdo usando os marcadores:
 
-- Para PDF: [GERAR_PDF:nome-do-arquivo]conteúdo markdown completo aqui[FIM_PDF]
-- Para Word/DOCX: [GERAR_DOCX:nome-do-arquivo]conteúdo markdown completo aqui[FIM_DOCX]
-- Para Excel: [GERAR_XLSX:nome-do-arquivo]conteúdo markdown completo aqui[FIM_XLSX]
-- Para TXT: [GERAR_TXT:nome-do-arquivo]conteúdo markdown completo aqui[FIM_TXT]
+Quando o usuário pedir QUALQUER arquivo, use os marcadores:
 
-O conteúdo DENTRO dos marcadores deve ter formatação markdown completa (títulos # ## ###, listas - , tabelas | col |, negrito **texto**, separadores ---).
+- PDF: [GERAR_PDF:nome-do-arquivo]conteúdo markdown aqui[FIM_PDF]
+- DOCX: [GERAR_DOCX:nome-do-arquivo]conteúdo markdown aqui[FIM_DOCX]
+- XLSX: [GERAR_XLSX:nome-do-arquivo]conteúdo markdown aqui[FIM_XLSX]
+- TXT: [GERAR_TXT:nome-do-arquivo]conteúdo markdown aqui[FIM_TXT]
 
-O texto ANTES e DEPOIS dos marcadores aparece normal na conversa.
-O conteúdo DENTRO dos marcadores vira o arquivo gerado.
+**O usuário pode controlar o estilo pelo prompt.** Detecte as preferências dele:
 
-EXEMPLO de resposta correta quando pedirem PDF sobre DIFAL:
+**TEMAS disponíveis** (detectados automaticamente):
+- "executivo" / "profissional" → tema azul escuro corporativo
+- "clean" / "limpo" → minimalista preto e branco
+- "colorido" → roxo vibrante
+- "minimalista" / "sem cabeçalho" → só texto
+- "formal" / "serif" → Times, navy, tradicional
 
-"Aqui está o PDF sobre DIFAL conforme solicitado:
+**OPÇÕES que você pode aplicar no conteúdo:**
+- Sem capa → só vai direto pro conteúdo
+- Sem cabeçalho/rodapé → minimalista
+- Sem tabelas → usar apenas listas
+- Fonte menor/maior → ajusta tamanho
+- Cor personalizada → mudar tema
+- Uma página → conteúdo condensado
 
-[GERAR_PDF:guia-difal]
-# DIFAL - Diferencial de Alíquota
+**IMPORTANTE:** Use SEMPRE formatação markdown completa DENTRO dos marcadores:
+- # Título principal, ## Subtítulo, ### Seção
+- **negrito**, *itálico*
+- Listas com - ou *
+- Tabelas: | Col1 | Col2 |
+- Separadores ---
+- Citações >
 
-## O que é?
-O **DIFAL** é...
-
-## Tabela de Alíquotas
-
-| Estado | Alíquota |
-|--------|----------|
-| SP | 18% |
-| RJ | 20% |
-[FIM_PDF]
-
-Quer que eu ajuste algo?"
-
-NUNCA diga que não pode gerar arquivos. SEMPRE use os marcadores quando pedirem.`
+NUNCA diga que não pode gerar. SEMPRE use os marcadores.`
       },
       ...enhancedMessages
     ];
