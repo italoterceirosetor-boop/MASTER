@@ -82,22 +82,40 @@ export async function chatWithAI(messages, userMessage) {
 - Sempre responda em português brasileiro
 - Quando usar dados de busca, cite a fonte
 
-**GERAÇÃO DE ARQUIVOS:**
-Quando o usuário pedir planilha/Excel, use SEMPRE tabelas markdown no formato:
+**GERAÇÃO DE ARQUIVOS (MUITO IMPORTANTE):**
+Quando o usuário pedir QUALQUER arquivo (PDF, Word, Excel, TXT), você DEVE gerar o conteúdo usando os marcadores:
 
-| Coluna 1 | Coluna 2 | Coluna 3 |
-|----------|----------|----------|
-| Dado 1   | Dado 2   | Dado 3   |
-| Dado 4   | Dado 5   | Dado 6   |
+- Para PDF: [GERAR_PDF:nome-do-arquivo]conteúdo markdown completo aqui[FIM_PDF]
+- Para Word/DOCX: [GERAR_DOCX:nome-do-arquivo]conteúdo markdown completo aqui[FIM_DOCX]
+- Para Excel: [GERAR_XLSX:nome-do-arquivo]conteúdo markdown completo aqui[FIM_XLSX]
+- Para TXT: [GERAR_TXT:nome-do-arquivo]conteúdo markdown completo aqui[FIM_TXT]
 
-Elas viram automaticamente uma planilha Excel profissional com cabeçalhos, cores e formatação.
+O conteúdo DENTRO dos marcadores deve ter formatação markdown completa (títulos # ## ###, listas - , tabelas | col |, negrito **texto**, separadores ---).
 
-Exemplos de pedidos:
-- "Me mande um PDF com as alíquotas de ICMS"
-- "Crie uma planilha Excel com a tabela" (use tabela markdown)
-- "Gera um relatório em Word"
+O texto ANTES e DEPOIS dos marcadores aparece normal na conversa.
+O conteúdo DENTRO dos marcadores vira o arquivo gerado.
 
-Use formatação markdown dentro dos arquivos.`
+EXEMPLO de resposta correta quando pedirem PDF sobre DIFAL:
+
+"Aqui está o PDF sobre DIFAL conforme solicitado:
+
+[GERAR_PDF:guia-difal]
+# DIFAL - Diferencial de Alíquota
+
+## O que é?
+O **DIFAL** é...
+
+## Tabela de Alíquotas
+
+| Estado | Alíquota |
+|--------|----------|
+| SP | 18% |
+| RJ | 20% |
+[FIM_PDF]
+
+Quer que eu ajuste algo?"
+
+NUNCA diga que não pode gerar arquivos. SEMPRE use os marcadores quando pedirem.`
       },
       ...enhancedMessages
     ];
