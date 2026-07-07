@@ -1,87 +1,46 @@
-// Gera PDF, Word e Excel profissionais com TEMAS customizáveis
-import PDFDocument from 'pdfkit';
+// Gera PDF, Word e Excel profissionais usando Puppeteer pra PDF
 import ExcelJS from 'exceljs';
 import {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   AlignmentType, Table, TableRow, TableCell, WidthType,
   BorderStyle, ShadingType
 } from 'docx';
+import puppeteer from 'puppeteer';
 
-// ====== TEMAS PRÉ-DEFINIDOS ======
+// ====== TEMAS ======
 const THEMES = {
   executivo: {
     name: 'Executivo',
-    primaryColor: '#1E3A8A',      // azul escuro
-    accentColor: '#3B82F6',
-    headerBg: '#1E3A8A',
-    titleSize: 16,
-    h1Size: 18,
-    h2Size: 14,
-    bodySize: 11,
-    showCover: true,
-    showHeader: true,
-    showFooter: true,
-    font: 'Helvetica'
+    primary: '#1E3A8A',
+    accent: '#3B82F6',
+    bg: '#FFFFFF'
   },
   clean: {
     name: 'Clean',
-    primaryColor: '#111827',       // preto suave
-    accentColor: '#6B7280',
-    headerBg: '#F3F4F6',
-    titleSize: 20,
-    h1Size: 16,
-    h2Size: 13,
-    bodySize: 11,
-    showCover: true,
-    showHeader: false,
-    showFooter: true,
-    font: 'Helvetica'
+    primary: '#111827',
+    accent: '#6B7280',
+    bg: '#FFFFFF'
   },
   colorido: {
     name: 'Colorido',
-    primaryColor: '#7C3AED',       // roxo
-    accentColor: '#EC4899',
-    headerBg: '#7C3AED',
-    titleSize: 18,
-    h1Size: 16,
-    h2Size: 13,
-    bodySize: 11,
-    showCover: true,
-    showHeader: true,
-    showFooter: true,
-    font: 'Helvetica'
+    primary: '#7C3AED',
+    accent: '#EC4899',
+    bg: '#FFFFFF'
   },
   minimalista: {
     name: 'Minimalista',
-    primaryColor: '#000000',
-    accentColor: '#666666',
-    headerBg: '#FFFFFF',
-    titleSize: 14,
-    h1Size: 13,
-    h2Size: 12,
-    bodySize: 10,
-    showCover: false,
-    showHeader: false,
-    showFooter: false,
-    font: 'Helvetica'
+    primary: '#000000',
+    accent: '#666666',
+    bg: '#FFFFFF'
   },
   formal: {
     name: 'Formal',
-    primaryColor: '#0F172A',       // navy
-    accentColor: '#475569',
-    headerBg: '#0F172A',
-    titleSize: 18,
-    h1Size: 16,
-    h2Size: 13,
-    bodySize: 11,
-    showCover: true,
-    showHeader: true,
-    showFooter: true,
-    font: 'Times-Roman'
+    primary: '#0F172A',
+    accent: '#475569',
+    bg: '#FFFFFF'
   }
 };
 
-// Detecta tema pedido pelo usuário
 export function detectTheme(message) {
   const lower = message.toLowerCase();
   if (/executiv|profissional|corporativ/.test(lower)) return 'executivo';
@@ -89,328 +48,498 @@ export function detectTheme(message) {
   if (/color|roxo|rosa|colorido|vibrante/.test(lower)) return 'colorido';
   if (/minimal|s[óo] texto|sem cabe[çc]alho/.test(lower)) return 'minimalista';
   if (/formal|serif|times|cl[áa]ssico|tradicional/.test(lower)) return 'formal';
-  return 'executivo'; // padrão
+  return 'executivo';
 }
 
-// Detecta opções extras
 export function detectOptions(message) {
   const lower = message.toLowerCase();
   return {
     semCapa: /sem capa|sem t[íi]tulo/.test(lower),
     semCabecalho: /sem cabe[çc]alho|sem header/.test(lower),
     semRodape: /sem rodape|sem footer/.test(lower),
-    umaPagina: /uma p[áa]gina|s[óo] uma|single page/.test(lower),
     semTabela: /sem tabela|sem tabelas/.test(lower),
-    semImagem: /sem imagem|sem gr[áa]fico/.test(lower),
     corPersonalizada: lower.match(/cor\s*([#a-f0-9]{3,6})/i)?.[1],
     fonteMenor: /fonte\s*(pequena|menor|10|9)/.test(lower),
     fonteMaior: /fonte\s*(grande|maior|14|16)/.test(lower)
   };
 }
 
-// ====== PDF PROFISSIONAL (REESCRITO COM MOVE DOWN CORRETO) ======
-export async function generatePDF({ title, content, theme = 'executivo', options = {} }) {
-  const t = { ...THEMES[theme] || THEMES.executivo };
+// ====== MARKDOWN → HTML ======
+function markdownToHtml(content, theme) {
+  const lines = content.split('\n');
+  let html = '';
+  let inTable = false;
+  let tableRows = [];
+  let inCodeBlock = false;
+  let codeBuffer = [];
 
-  if (options.corPersonalizada) {
-    t.primaryColor = options.corPersonalizada.startsWith('#') ? options.corPersonalizada : '#' + options.corPersonalizada;
-    t.headerBg = t.primaryColor;
-  }
-  if (options.fonteMenor) t.bodySize = Math.max(9, t.bodySize - 2);
-  if (options.fonteMaior) t.bodySize = Math.min(14, t.bodySize + 2);
-  if (options.semCapa) t.showCover = false;
-  if (options.semCabecalho) t.showHeader = false;
-  if (options.semRodape) t.showFooter = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
 
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({
-        size: 'A4',
-        margins: { top: 80, bottom: 60, left: 60, right: 60 },
-        bufferPages: true,
-        info: { Title: title, Author: 'Master IA', Creator: 'Master IA' }
-      });
-
-      const chunks = [];
-      doc.on('data', chunk => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      const pageWidth = doc.page.width;
-      const pageHeight = doc.page.height;
-      const marginLeft = 60;
-      const marginRight = 60;
-      const contentWidth = pageWidth - marginLeft - marginRight;
-
-      function addHeader() {
-        if (!t.showHeader) return;
-        doc.save();
-        doc.fillColor(t.primaryColor).fontSize(10).font('Helvetica-Bold')
-           .text('Master IA', marginLeft, 25, { lineBreak: false });
-        doc.fontSize(7).fillColor('#888').font('Helvetica')
-           .text('Master Contabilidade & Consultoria', marginLeft, 40, { lineBreak: false });
-        doc.strokeColor(t.primaryColor).lineWidth(1)
-           .moveTo(marginLeft, 55).lineTo(pageWidth - marginRight, 55).stroke();
-        doc.restore();
+    // Bloco de código
+    if (trimmed.startsWith('```')) {
+      if (!inCodeBlock) {
+        inCodeBlock = true; codeBuffer = []; continue;
+      } else {
+        html += `<pre><code>${escapeHtml(codeBuffer.join('\n'))}</code></pre>\n`;
+        inCodeBlock = false; codeBuffer = [];
+        continue;
       }
-
-      function addFooter(pageNum, totalPages) {
-        if (!t.showFooter) return;
-        doc.save();
-        const footerY = pageHeight - 30;
-        doc.fontSize(7).fillColor('#888').font('Helvetica');
-        doc.text('Master IA — Documento gerado automaticamente', marginLeft, footerY, { lineBreak: false });
-        doc.text(`Página ${pageNum} de ${totalPages}`, marginLeft, footerY, {
-          width: contentWidth, align: 'right', lineBreak: false
-        });
-        doc.restore();
-      }
-
-      // CAPA
-      if (t.showCover) {
-        doc.fillColor(t.primaryColor).fontSize(40).font('Helvetica-Bold')
-           .text('Master IA', marginLeft, 200, { lineBreak: false });
-        doc.fontSize(14).fillColor('#666').font('Helvetica')
-           .text('Master Contabilidade & Consultoria', marginLeft, 250, { lineBreak: false });
-
-        doc.strokeColor(t.primaryColor).lineWidth(3)
-           .moveTo(marginLeft, 290).lineTo(pageWidth - marginRight, 290).stroke();
-
-        doc.fillColor('#000').fontSize(28).font('Helvetica-Bold')
-           .text(title, marginLeft, 360, { width: contentWidth, align: 'center' });
-
-        doc.fontSize(11).fillColor('#666').font('Helvetica-Oblique')
-           .text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, marginLeft, 470, {
-             width: contentWidth, align: 'center'
-           });
-
-        doc.addPage();
-        addHeader();
-      }
-
-      // Função de espaçamento usando moveDown (mais confiável)
-      function space(multiplier = 1) {
-        doc.moveDown(multiplier);
-      }
-
-      function newSection() {
-        space(1.5);
-      }
-
-      function renderHeading(text, size, color) {
-        space(1);
-        doc.fontSize(size).font('Helvetica-Bold').fillColor(color)
-           .text(text, marginLeft, doc.y, { width: contentWidth, align: 'left' });
-        space(0.5);
-      }
-
-      function renderParagraph(text, size, font, color, indent = 0) {
-        doc.fontSize(size).font(font).fillColor(color)
-           .text(text, marginLeft + indent, doc.y, { width: contentWidth - indent, align: 'left', lineGap: 3 });
-        space(0.5);
-      }
-
-      function renderBullet(text, size, color) {
-        doc.fontSize(size).font('Helvetica').fillColor(t.accentColor);
-        const bulletY = doc.y;
-        doc.text('•', marginLeft + 5, bulletY, { lineBreak: false });
-        doc.fillColor('#000').font('Helvetica')
-           .text(text, marginLeft + 20, bulletY, { width: contentWidth - 20, align: 'left', lineGap: 3 });
-        space(0.3);
-      }
-
-      function renderNumbered(num, text, size) {
-        doc.fontSize(size).font('Helvetica-Bold').fillColor(t.primaryColor);
-        const y = doc.y;
-        doc.text(`${num}.`, marginLeft + 5, y, { lineBreak: false });
-        doc.font('Helvetica').fillColor('#000')
-           .text(text, marginLeft + 25, y, { width: contentWidth - 25, align: 'left', lineGap: 3 });
-        space(0.3);
-      }
-
-      function renderQuote(text, size) {
-        doc.fontSize(size).font('Helvetica-Oblique').fillColor('#555')
-           .text(text, marginLeft + 20, doc.y, { width: contentWidth - 20, align: 'left', lineGap: 3 });
-        space(0.5);
-      }
-
-      function renderSeparator() {
-        space(0.8);
-        doc.strokeColor('#CCCCCC').lineWidth(0.5)
-           .moveTo(marginLeft, doc.y).lineTo(marginLeft + contentWidth, doc.y).stroke();
-        space(0.8);
-      }
-
-      function renderTable(rows) {
-        if (rows.length === 0 || options.semTabela) return;
-        const parsed = rows.filter(r => !r.includes('---'))
-          .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
-        if (parsed.length === 0) return;
-
-        const colCount = parsed[0].length;
-        const colWidth = contentWidth / colCount;
-        const rowHeight = 22;
-        const cellPad = 8;
-
-        // Cabeçalho
-        space(1);
-        const headerY = doc.y;
-        doc.rect(marginLeft, headerY, contentWidth, rowHeight).fillColor(t.headerBg).fill();
-        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
-        parsed[0].forEach((cellText, i) => {
-          doc.text(cellText || '', marginLeft + (i * colWidth) + cellPad, headerY + 5, {
-            width: colWidth - (cellPad * 2), align: 'center', lineBreak: false,
-            ellipsis: true, height: rowHeight - 5
-          });
-        });
-        doc.y = headerY + rowHeight;
-
-        // Dados
-        doc.font('Helvetica').fontSize(9).fillColor('#000');
-        for (let r = 1; r < parsed.length; r++) {
-          const rowY = doc.y;
-          if (r % 2 === 0) {
-            doc.rect(marginLeft, rowY, contentWidth, rowHeight).fillColor('#F8FAFC').fill();
-          }
-          doc.fillColor('#000').font('Helvetica');
-          parsed[r].forEach((cellText, i) => {
-            doc.text(cellText.replace(/\*\*/g, '') || '', marginLeft + (i * colWidth) + cellPad, rowY + 5, {
-              width: colWidth - (cellPad * 2),
-              align: i === 0 ? 'left' : 'center',
-              lineBreak: false, ellipsis: true, height: rowHeight - 5
-            });
-          });
-          doc.y = rowY + rowHeight;
-        }
-
-        space(1);
-      }
-
-      // ============ PROCESSA CONTEÚDO ============
-      const lines = content.split('\n');
-      let inCodeBlock = false, codeBuffer = [];
-      let tableBuffer = [], inTable = false;
-
-      // Inicia após o header
-      if (!t.showCover) addHeader();
-      doc.y = t.showCover ? 80 : 70;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmed = line.trim();
-
-        if (trimmed.startsWith('```')) {
-          if (!inCodeBlock) { inCodeBlock = true; codeBuffer = []; continue; }
-          else {
-            const codeText = codeBuffer.join('\n');
-            space(0.5);
-            const codeStartY = doc.y;
-            const codeHeight = Math.max(codeBuffer.length * 12 + 16, 30);
-            doc.rect(marginLeft, codeStartY, contentWidth, codeHeight).fillColor('#0d1117').fill();
-            doc.fillColor('#E6EDF3').font('Courier').fontSize(9)
-               .text(codeText, marginLeft + 10, codeStartY + 8, { width: contentWidth - 20 });
-            doc.y = codeStartY + codeHeight;
-            space(0.5);
-            inCodeBlock = false; codeBuffer = [];
-            continue;
-          }
-        }
-        if (inCodeBlock) { codeBuffer.push(line); continue; }
-
-        if (line.startsWith('|') && line.endsWith('|')) {
-          tableBuffer.push(line); inTable = true; continue;
-        } else if (inTable && tableBuffer.length > 0) {
-          renderTable(tableBuffer);
-          tableBuffer = []; inTable = false;
-        }
-
-        if (line.startsWith('# ')) {
-          renderHeading(line.substring(2), t.h1Size + 4, t.primaryColor);
-        }
-        else if (line.startsWith('## ')) {
-          renderHeading(line.substring(3), t.h2Size + 2, t.primaryColor);
-        }
-        else if (line.startsWith('### ')) {
-          renderHeading(line.substring(4), t.h2Size, '#333');
-        }
-        else if (trimmed === '---') {
-          renderSeparator();
-        }
-        else if (line.startsWith('> ')) {
-          renderQuote(line.substring(2).replace(/\*\*/g, ''), t.bodySize);
-        }
-        else if (line.startsWith('- ') || line.startsWith('* ')) {
-          renderBullet(line.substring(2).replace(/\*\*/g, ''), t.bodySize, t.accentColor);
-        }
-        else if (/^\d+\.\s/.test(line)) {
-          const match = line.match(/^(\d+)\.\s(.*)$/);
-          renderNumbered(match[1], match[2].replace(/\*\*/g, ''), t.bodySize);
-        }
-        else if (trimmed === '') {
-          space(0.5);
-        }
-        else {
-          const processedLine = line.replace(/\*\*/g, '');
-          renderParagraph(processedLine, t.bodySize, t.font, '#000');
-        }
-      }
-
-      if (inTable && tableBuffer.length > 0) renderTable(tableBuffer);
-
-      // Footer em todas as páginas
-      const range = doc.bufferedPageRange();
-      const totalPages = range.count;
-      for (let i = range.start; i < range.start + totalPages; i++) {
-        doc.switchToPage(i);
-        addFooter(i - range.start + 1, totalPages);
-      }
-
-      doc.end();
-    } catch (err) {
-      reject(err);
     }
-  });
+    if (inCodeBlock) { codeBuffer.push(line); continue; }
+
+    // Tabela markdown
+    if (line.startsWith('|') && line.endsWith('|')) {
+      tableRows.push(line);
+      inTable = true;
+      continue;
+    } else if (inTable && tableRows.length > 0) {
+      html += renderTableHtml(tableRows, theme) + '\n';
+      tableRows = [];
+      inTable = false;
+    }
+
+    // Títulos
+    if (line.startsWith('# ')) {
+      html += `<h1>${processInline(line.substring(2))}</h1>\n`;
+    } else if (line.startsWith('## ')) {
+      html += `<h2>${processInline(line.substring(3))}</h2>\n`;
+    } else if (line.startsWith('### ')) {
+      html += `<h3>${processInline(line.substring(4))}</h3>\n`;
+    } else if (line.startsWith('#### ')) {
+      html += `<h4>${processInline(line.substring(5))}</h4>\n`;
+    }
+    // Separador
+    else if (trimmed === '---') {
+      html += `<hr/>\n`;
+    }
+    // Citação
+    else if (line.startsWith('> ')) {
+      html += `<blockquote>${processInline(line.substring(2))}</blockquote>\n`;
+    }
+    // Lista com bullet
+    else if (line.startsWith('- ') || line.startsWith('* ')) {
+      html += `<ul><li>${processInline(line.substring(2))}</li></ul>\n`;
+    }
+    // Lista numerada
+    else if (/^\d+\.\s/.test(line)) {
+      const match = line.match(/^(\d+)\.\s(.*)$/);
+      html += `<ol><li>${processInline(match[2])}</li></ol>\n`;
+    }
+    // Linha vazia
+    else if (trimmed === '') {
+      html += '\n';
+    }
+    // Texto normal
+    else {
+      html += `<p>${processInline(line)}</p>\n`;
+    }
+  }
+
+  if (inTable && tableRows.length > 0) {
+    html += renderTableHtml(tableRows, theme) + '\n';
+  }
+
+  return html;
 }
 
-// ====== WORD PROFISSIONAL COM TEMAS ======
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function processInline(text) {
+  // Processa **negrito**, *itálico*, `código`
+  let result = escapeHtml(text);
+  result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  result = result.replace(/`([^`]+)`/g, '<code>$1</code>');
+  return result;
+}
+
+function renderTableHtml(rows, theme) {
+  const parsed = rows
+    .filter(r => !r.includes('---'))
+    .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+
+  if (parsed.length === 0) return '';
+
+  let html = '<table>\n';
+  // Cabeçalho
+  html += '<thead><tr>';
+  parsed[0].forEach(cell => {
+    html += `<th>${processInline(cell)}</th>`;
+  });
+  html += '</tr></thead>\n';
+
+  // Dados
+  html += '<tbody>\n';
+  for (let i = 1; i < parsed.length; i++) {
+    html += '<tr>';
+    parsed[i].forEach(cell => {
+      html += `<td>${processInline(cell)}</td>`;
+    });
+    html += '</tr>\n';
+  }
+  html += '</tbody>\n</table>\n';
+  return html;
+}
+
+// ====== GERA HTML COMPLETO PRA PDF ======
+function buildHtml(title, content, theme = 'executivo', options = {}) {
+  const t = { ...THEMES[theme] || THEMES.executivo };
+
+  let primary = t.primary;
+  let accent = t.accent;
+  let showCover = true;
+  let showHeader = true;
+  let showFooter = true;
+  let bodySize = '14px';
+  let titleSize = '28px';
+
+  if (options.corPersonalizada) {
+    primary = options.corPersonalizada.startsWith('#') ? options.corPersonalizada : '#' + options.corPersonalizada;
+    accent = primary;
+  }
+  if (options.fonteMenor) bodySize = '11px';
+  if (options.fonteMaior) bodySize = '16px';
+  if (options.semCapa) showCover = false;
+  if (options.semCabecalho) showHeader = false;
+  if (options.semRodape) showFooter = false;
+
+  const htmlContent = markdownToHtml(content, t);
+
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>${escapeHtml(title)}</title>
+<style>
+  @page {
+    size: A4;
+    margin: ${showCover || showHeader ? '20mm 15mm' : '15mm'};
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    font-size: ${bodySize};
+    line-height: 1.6;
+    color: #1f2937;
+    background: white;
+  }
+
+  ${showHeader ? `
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 0;
+    border-bottom: 2px solid ${primary};
+    font-size: 11px;
+    background: white;
+  }
+  .header .logo {
+    color: ${primary};
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .header .subtitle {
+    color: #6b7280;
+    font-size: 10px;
+  }
+  ` : ''}
+
+  ${showCover ? `
+  .cover {
+    page-break-after: always;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 40px;
+  }
+  .cover .logo-big {
+    color: ${primary};
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .cover .logo-sub {
+    color: #6b7280;
+    font-size: 16px;
+    margin-bottom: 40px;
+  }
+  .cover .divider {
+    width: 200px;
+    height: 3px;
+    background: ${primary};
+    margin: 20px auto;
+  }
+  .cover .doc-title {
+    font-size: ${titleSize};
+    font-weight: 700;
+    color: #111827;
+    margin: 30px 0;
+  }
+  .cover .date {
+    color: #6b7280;
+    font-size: 12px;
+    font-style: italic;
+  }
+  ` : ''}
+
+  ${showFooter ? `
+  .footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 0;
+    border-top: 1px solid #e5e7eb;
+    font-size: 10px;
+    color: #6b7280;
+    display: flex;
+    justify-content: space-between;
+  }
+  ` : ''}
+
+  .content {
+    ${showCover || showHeader ? 'padding-top: 30px;' : ''}
+    ${showFooter ? 'padding-bottom: 30px;' : ''}
+  }
+
+  /* Tipografia */
+  h1 {
+    color: ${primary};
+    font-size: 24px;
+    font-weight: 700;
+    margin: 30px 0 15px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid ${primary};
+  }
+
+  h2 {
+    color: ${primary};
+    font-size: 20px;
+    font-weight: 700;
+    margin: 25px 0 12px 0;
+  }
+
+  h3 {
+    color: #374151;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 20px 0 10px 0;
+  }
+
+  h4 {
+    color: #4b5563;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 15px 0 8px 0;
+  }
+
+  p {
+    margin: 8px 0;
+    text-align: justify;
+  }
+
+  /* Listas */
+  ul, ol {
+    margin: 8px 0 8px 20px;
+  }
+
+  li {
+    margin: 4px 0;
+  }
+
+  /* Negrito e itálico */
+  strong { font-weight: 700; color: #111827; }
+  em { font-style: italic; }
+
+  /* Citação */
+  blockquote {
+    margin: 12px 0;
+    padding: 10px 20px;
+    border-left: 4px solid ${accent};
+    background: #f9fafb;
+    color: #4b5563;
+    font-style: italic;
+  }
+
+  /* Separador */
+  hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 20px 0;
+  }
+
+  /* Código */
+  code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #be185d;
+  }
+
+  pre {
+    background: #1f2937;
+    color: #e5e7eb;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  /* Tabelas */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 0.9em;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    background: ${primary};
+    color: white;
+  }
+
+  th {
+    padding: 10px 12px;
+    text-align: center;
+    font-weight: 600;
+    border: 1px solid ${primary};
+  }
+
+  td {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+  }
+
+  tbody tr:nth-child(even) {
+    background: #f9fafb;
+  }
+
+  tbody tr:hover {
+    background: #f3f4f6;
+  }
+</style>
+</head>
+<body>
+
+${showHeader ? `
+<div class="header">
+  <div class="logo">Master IA</div>
+  <div class="subtitle">Master Contabilidade & Consultoria</div>
+</div>
+` : ''}
+
+${showCover ? `
+<div class="cover">
+  <div class="logo-big">Master IA</div>
+  <div class="logo-sub">Master Contabilidade & Consultoria</div>
+  <div class="divider"></div>
+  <div class="doc-title">${escapeHtml(title)}</div>
+  <div class="date">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+</div>
+` : ''}
+
+<div class="content">
+  ${htmlContent}
+</div>
+
+${showFooter ? `
+<div class="footer">
+  <span>Master IA — Documento gerado automaticamente</span>
+  <span class="page-number"></span>
+</div>
+` : ''}
+
+</body>
+</html>`;
+}
+
+// ====== PDF VIA PUPPETEER (HTML → PDF PROFISSIONAL) ======
+export async function generatePDF({ title, content, theme = 'executivo', options = {} }) {
+  const html = buildHtml(title, content, theme, options);
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: 0, bottom: 0, left: 0, right: 0 },
+      displayHeaderFooter: false
+    });
+
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+}
+
+// ====== WORD (DOCX) PROFISSIONAL ======
 export async function generateDOCX({ title, content, theme = 'executivo', options = {} }) {
   const t = { ...THEMES[theme] || THEMES.executivo };
-  const primaryRGB = hexToDocxColor(t.primaryColor);
-  const accentRGB = hexToDocxColor(t.accentColor);
+  const primaryRGB = t.primary.replace('#', '').toUpperCase();
 
   const lines = content.split('\n');
   const children = [];
 
-  if (t.showCover) {
-    children.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { before: 1500, after: 100 },
-        children: [new TextRun({ text: 'Master IA', size: 56, bold: true, color: primaryRGB })]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { after: 100 },
-        children: [new TextRun({ text: 'Master Contabilidade & Consultoria', size: 24, italics: true, color: '666666' })]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { after: 800 },
-        children: [new TextRun({ text: '━'.repeat(30), color: primaryRGB })]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { before: 800, after: 100 },
-        children: [new TextRun({ text: title, size: 48, bold: true })]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER, spacing: { after: 800 },
-        children: [new TextRun({ text: `Gerado em ${new Date().toLocaleString('pt-BR')}`, size: 22, italics: true, color: '888888' })]
-      }),
-      new Paragraph({ text: '', pageBreakBefore: true })
-    );
-  }
+  // CAPA
+  children.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { before: 1500, after: 100 },
+      children: [new TextRun({ text: 'Master IA', size: 56, bold: true, color: primaryRGB })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { after: 100 },
+      children: [new TextRun({ text: 'Master Contabilidade & Consultoria', size: 24, italics: true, color: '666666' })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { after: 800 },
+      children: [new TextRun({ text: '━'.repeat(30), color: primaryRGB })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { before: 800, after: 100 },
+      children: [new TextRun({ text: title, size: 48, bold: true })]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER, spacing: { after: 800 },
+      children: [new TextRun({ text: `Gerado em ${new Date().toLocaleString('pt-BR')}`, size: 22, italics: true, color: '888888' })]
+    }),
+    new Paragraph({ text: '', pageBreakBefore: true })
+  );
 
   let tableBuffer = [];
 
   function flushTable() {
-    if (tableBuffer.length === 0 || options.semTabela) return;
+    if (tableBuffer.length === 0) return;
     const parsed = tableBuffer.filter(r => !r.match(/^\|[\s\-|]+\|$/))
       .map(r => r.split('|').slice(1, -1).map(c => c.trim()));
     if (parsed.length === 0) { tableBuffer = []; return; }
@@ -418,7 +547,7 @@ export async function generateDOCX({ title, content, theme = 'executivo', option
     const headerRow = new TableRow({
       tableHeader: true,
       children: parsed[0].map(cellText => new TableCell({
-        shading: { fill: t.primaryColor.replace('#', ''), type: ShadingType.SOLID, color: 'auto' },
+        shading: { fill: primaryRGB, type: ShadingType.SOLID, color: 'auto' },
         children: [new Paragraph({
           alignment: AlignmentType.CENTER,
           children: [new TextRun({ text: cellText, bold: true, color: 'FFFFFF', size: 22 })]
@@ -437,10 +566,10 @@ export async function generateDOCX({ title, content, theme = 'executivo', option
       rows: [headerRow, ...dataRows],
       width: { size: 100, type: WidthType.PERCENTAGE },
       borders: {
-        top: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
-        bottom: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
-        left: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
-        right: { style: BorderStyle.SINGLE, size: 4, color: t.primaryColor.replace('#', '') },
+        top: { style: BorderStyle.SINGLE, size: 4, color: primaryRGB },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: primaryRGB },
+        left: { style: BorderStyle.SINGLE, size: 4, color: primaryRGB },
+        right: { style: BorderStyle.SINGLE, size: 4, color: primaryRGB },
         insideHorizontal: { style: BorderStyle.SINGLE, size: 2, color: 'E2E8F0' },
         insideVertical: { style: BorderStyle.SINGLE, size: 2, color: 'E2E8F0' }
       }
@@ -516,12 +645,28 @@ export async function generateDOCX({ title, content, theme = 'executivo', option
   return await Packer.toBuffer(doc);
 }
 
-// Helper: converte hex pra cor Word
-function hexToDocxColor(hex) {
-  return hex.replace('#', '').toUpperCase();
+function parseInlineMarkdown(text) {
+  const runs = [];
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  const parts = text.split(regex);
+
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.startsWith('**') && part.endsWith('**')) {
+      runs.push(new TextRun({ text: part.slice(2, -2), bold: true }));
+    } else if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      runs.push(new TextRun({ text: part.slice(1, -1), italics: true }));
+    } else if (part.startsWith('`') && part.endsWith('`')) {
+      runs.push(new TextRun({ text: part.slice(1, -1), font: 'Consolas', color: 'C7254E' }));
+    } else {
+      runs.push(new TextRun({ text: part }));
+    }
+  }
+
+  return runs.length > 0 ? runs : [new TextRun({ text })];
 }
 
-// ====== EXCEL ======
+// ====== EXCEL PROFISSIONAL ======
 export async function generateXLSX({ title, content }) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Master IA';
@@ -617,7 +762,6 @@ export function generateTXT({ title, content }) {
 export function parseGenerationMarkers(text) {
   const markers = [];
 
-  // Padrão 1: marcador completo [GERAR_PDF:nome]conteúdo[FIM_PDF]
   const completeRegex = /\[GERAR_(PDF|DOCX|XLSX|TXT):([^\]]+)\]([\s\S]*?)\[FIM_(PDF|DOCX|XLSX|TXT)\]/g;
 
   let cleanText = text;
@@ -631,10 +775,8 @@ export function parseGenerationMarkers(text) {
     cleanText = cleanText.replace(match[0], '');
   }
 
-  // Padrão 2: marcador sem fechar [GERAR_PDF:nome]conteúdo (pega até o fim ou próximo marcador)
   const openRegex = /\[GERAR_(PDF|DOCX|XLSX|TXT):([^\]]+)\]([\s\S]*?)(?=\[GERAR_|$)/g;
   while ((match = openRegex.exec(text)) !== null) {
-    // Só adiciona se não foi capturado pelo padrão completo
     const alreadyCaptured = markers.some(m => m.filename === match[2].trim());
     if (!alreadyCaptured && match[3].trim().length > 50) {
       markers.push({
@@ -646,7 +788,6 @@ export function parseGenerationMarkers(text) {
     }
   }
 
-  // Remove marcadores órfãos que sobraram
   cleanText = cleanText.replace(/\[GERAR_(PDF|DOCX|XLSX|TXT):[^\]]+\]/g, '');
   cleanText = cleanText.replace(/\[FIM_(PDF|DOCX|XLSX|TXT)\]/g, '');
 
