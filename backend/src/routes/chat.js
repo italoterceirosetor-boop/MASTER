@@ -3,7 +3,7 @@ import express from 'express';
 import { pool } from '../db/pool.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { chatWithAI } from '../services/chatService.js';
-import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT } from '../services/generatorService.js';
+import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT, detectTheme, detectOptions } from '../services/generatorService.js';
 
 const router = express.Router();
 
@@ -84,11 +84,15 @@ router.post('/', authMiddleware, async (req, res) => {
         let buffer, mimeType;
         const fullFilename = `${filename}.${type}`;
 
+        // Detecta tema e opções baseado na mensagem original
+        const theme = detectTheme(message);
+        const options = detectOptions(message);
+
         if (type === 'pdf') {
-          buffer = await generatePDF({ title: filename, content });
+          buffer = await generatePDF({ title: filename, content, theme, options });
           mimeType = 'application/pdf';
         } else if (type === 'docx') {
-          buffer = await generateDOCX({ title: filename, content });
+          buffer = await generateDOCX({ title: filename, content, theme, options });
           mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         } else if (type === 'xlsx') {
           buffer = await generateXLSX({ title: filename, content });
