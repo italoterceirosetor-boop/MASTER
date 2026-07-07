@@ -5,7 +5,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { extractFileContent, validateFile, formatFilesForAI } from '../services/fileService.js';
 import { pool } from '../db/pool.js';
 import { chatWithAI } from '../services/chatService.js';
-import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT } from '../services/generatorService.js';
+import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT, detectTheme, detectOptions } from '../services/generatorService.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -150,7 +150,7 @@ router.post('/chat', authMiddleware, upload.array('files', 5), async (req, res) 
 // Regenera arquivo a partir de texto editado
 router.post('/regenerate', authMiddleware, async (req, res) => {
   try {
-    const { conversationId, text, fileType, filename } = req.body;
+    const { conversationId, text, fileType, filename, originalPrompt } = req.body;
     const userId = req.userId;
 
     if (!text) {
@@ -168,12 +168,18 @@ router.post('/regenerate', authMiddleware, async (req, res) => {
     const type = fileType || 'pdf';
     const name = filename || `documento-${Date.now()}`;
 
+    // USA O PROMPT ORIGINAL pra detectar tema/opções
+    const theme = detectTheme(originalPrompt || '');
+    const options = detectOptions(originalPrompt || '');
+
+    console.log('Regenerando com:', { theme, options, promptLength: originalPrompt?.length });
+
     let buffer, mimeType;
     if (type === 'pdf') {
-      buffer = await generatePDF({ title: name, content: text });
+      buffer = await generatePDF({ title: name, content: text, theme, options });
       mimeType = 'application/pdf';
     } else if (type === 'docx') {
-      buffer = await generateDOCX({ title: name, content: text });
+      buffer = await generateDOCX({ title: name, content: text, theme, options });
       mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     } else if (type === 'xlsx') {
       buffer = await generateXLSX({ title: name, content: text });
