@@ -1,18 +1,21 @@
-# Serviço Python para geração de PDF
-# Endpoints:
-#   GET  /health         - Health check
-#   POST /generate-pdf   - Recebe markdown, retorna PDF
+# Serviço Python para geração de PDF - Master IA
+# Usa pdfkit + Chromium (via Dockerfile)
 
 from flask import Flask, request, jsonify, send_file
-from weasyprint import HTML, CSS
+import pdfkit
 import markdown
 import io
-import datetime
 import os
 import sys
 import traceback
+import tempfile
 
 app = Flask(__name__)
+
+# Configuração do pdfkit (Chromium instalado via Dockerfile)
+PDFKIT_CONFIG = pdfkit.configuration(
+    wkhtmltopdf='/usr/bin/chromium'
+) if os.path.exists('/usr/bin/chromium') else None
 
 THEMES = {
     "executivo": {"primary": "#1E3A8A", "accent": "#3B82F6", "name": "Executivo"},
@@ -30,15 +33,9 @@ THEMES = {
 def detect_theme(content=""):
     """Detecta tema automaticamente baseado no conteúdo"""
     content_lower = (content or "").lower()
-    for key in ["verde", "vermelho", "azul", "roxo", "preto", "rosa", "lilas"]:
+    for key in ["verde", "vermelho", "azul", "roxo", "preto", "rosa"]:
         if key in content_lower:
             return THEMES.get(key, THEMES["executivo"])
-    if "executiv" in content_lower or "profissional" in content_lower:
-        return THEMES["executivo"]
-    if "minimalista" in content_lower or "so texto" in content_lower:
-        return THEMES["minimalista"]
-    if "formal" in content_lower or "serif" in content_lower:
-        return THEMES["formal"]
     return THEMES["executivo"]
 
 
@@ -47,7 +44,7 @@ def generate_css(theme, options):
     accent = theme["accent"]
     one_page = options.get("umaPagina", False)
 
-    font_size = "10px" if one_page else "11px"
+    font_size = "11px" if not one_page else "9px"
     h1_size = "22px" if not one_page else "14px"
     h2_size = "15px" if not one_page else "11px"
 
@@ -60,18 +57,11 @@ h2 { font-size: 11px; margin: 6px 0 4px 0; }
 h3 { font-size: 10px; margin: 4px 0 2px 0; }
 p, li { margin: 3px 0; }
 ul, ol { margin: 4px 0 4px 14px; }
-table { font-size: 0.8em; margin: 4px 0; }
+table { font-size: 0.85em; margin: 4px 0; }
 th, td { padding: 3px 5px; }
-blockquote { margin: 4px 0; padding: 4px 10px; }
-pre { margin: 4px 0; padding: 6px; font-size: 8px; }
-.cover { padding: 40px 15px; min-height: 60vh; }
-.cover-logo { font-size: 32px; }
-.cover-title { font-size: 20px; }
 """
 
     return f"""
-@page {{ size: A4; margin: 25mm 20mm 25mm 20mm; }}
-
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
 body {{
@@ -80,13 +70,14 @@ body {{
     line-height: 1.5;
     color: #1f2937;
     background: white;
+    padding: 20px 25px;
 }}
 
 h1 {{
     color: {primary};
     font-size: {h1_size};
     font-weight: 700;
-    margin: 16px 0 8px 0;
+    margin: 18px 0 10px 0;
     padding-bottom: 6px;
     border-bottom: 2px solid {primary};
     page-break-after: avoid;
@@ -114,10 +105,10 @@ h4 {{
     margin: 8px 0 4px 0;
 }}
 
-p {{ margin: 5px 0; text-align: justify; orphans: 3; widows: 3; }}
+p {{ margin: 5px 0; text-align: justify; }}
 
-ul, ol {{ margin: 6px 0 6px 18px; padding-left: 8px; }}
-li {{ margin: 3px 0; page-break-inside: avoid; }}
+ul, ol {{ margin: 6px 0 6px 18px; }}
+li {{ margin: 3px 0; }}
 
 strong {{ font-weight: 700; color: #111827; }}
 em {{ font-style: italic; }}
@@ -138,7 +129,6 @@ pre {{
     border-radius: 6px;
     margin: 10px 0;
     font-size: 10px;
-    page-break-inside: avoid;
     white-space: pre-wrap;
 }}
 
@@ -149,7 +139,6 @@ blockquote {{
     padding: 8px 14px;
     border-left: 3px solid {accent};
     background: #f9fafb;
-    color: #4b5563;
     font-style: italic;
 }}
 
@@ -177,7 +166,6 @@ th {{
 td {{
     padding: 6px 10px;
     border: 1px solid #e5e7eb;
-    vertical-align: middle;
 }}
 
 tbody tr:nth-child(even) {{ background: #f9fafb; }}
@@ -205,7 +193,12 @@ tbody tr:nth-child(even) {{ background: #f9fafb; }}
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "Master IA PDF Service", "version": "1.0"})
+    return jsonify({
+        "status": "ok",
+        "service": "Master IA PDF Service",
+        "version": "1.0",
+        "engine": "pdfkit + chromium"
+    })
 
 
 @app.route("/generate-pdf", methods=["POST"])
@@ -220,24 +213,22 @@ def generate_pdf():
         theme_name = data.get("theme", "executivo")
         options = data.get("options", {})
 
-        # Seleciona tema
         theme = THEMES.get(theme_name)
         if not theme:
             theme = detect_theme(content)
 
-        # Gera CSS
         css_text = generate_css(theme, options)
 
         # Converte markdown → HTML
         html_content = markdown.markdown(
             content,
-            extensions=["extra", "tables", "fenced_code", "toc", "sane_lists"]
+            extensions=["extra", "tables", "fenced_code", "sane_lists"]
         )
 
-        # Capa opcional
         show_cover = not options.get("semCapa", False)
         cover_html = ""
         if show_cover:
+            import datetime
             cover_html = f"""
 <div class="cover">
     <div class="cover-logo">Master IA</div>
@@ -253,6 +244,7 @@ def generate_pdf():
 <head>
     <meta charset="UTF-8">
     <title>{title}</title>
+    <style>{css_text}</style>
 </head>
 <body>
     {cover_html}
@@ -260,10 +252,21 @@ def generate_pdf():
 </body>
 </html>"""
 
-        # Gera PDF com WeasyPrint
-        pdf_bytes = HTML(string=full_html).write_pdf(
-            stylesheets=[CSS(string=css_text)]
-        )
+        # Gera PDF com pdfkit (Chromium)
+        pdfkit_options = {
+            'page-size': 'A4',
+            'margin-top': '20mm',
+            'margin-right': '20mm',
+            'margin-bottom': '20mm',
+            'margin-left': '20mm',
+            'encoding': 'UTF-8',
+            'quiet': ''
+        }
+
+        if PDFKIT_CONFIG:
+            pdf_bytes = pdfkit.from_string(full_html, False, configuration=PDFKIT_CONFIG, options=pdfkit_options)
+        else:
+            pdf_bytes = pdfkit.from_string(full_html, False, options=pdfkit_options)
 
         print(f"[PDF Service] Gerado: {title}.pdf ({len(pdf_bytes)} bytes)", file=sys.stderr)
 
