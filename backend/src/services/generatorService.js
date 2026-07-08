@@ -688,13 +688,10 @@ export async function generatePDF({ title, content, theme = 'executivo', options
 
       function renderBullet(text) {
         checkPage(18);
-        doc.fontSize(11).font('Helvetica').fillColor(accent.r, accent.g, accent.b);
-        // Bullet na cor accent
-        const bulletY = y;
-        doc.text('•', margin + 5, bulletY, { continued: false });
-        // Texto
-        doc.font('Helvetica').fillColor(0, 0, 0);
-        doc.text(text, margin + 20, y, { width: pageWidth - 20, align: 'left', lineGap: 3 });
+        // Texto do bullet em preto normal
+        doc.fontSize(11).font('Helvetica').fillColor(0, 0, 0);
+        const bulletText = `•  ${text}`;
+        doc.text(bulletText, margin + 5, y, { width: pageWidth - 5, align: 'left', lineGap: 3 });
         y = doc.y + 4;
       }
 
@@ -757,7 +754,11 @@ export async function generatePDF({ title, content, theme = 'executivo', options
         checkPage(totalHeight + 10);
         const tableY = y;
 
-        // Cabeçalho (fundo colorido)
+        // ===== CABEÇALHO =====
+        // Salva estado antes de preencher fundo
+        doc.save();
+
+        // Fundo do cabeçalho (cor primária)
         doc.rect(margin, tableY, pageWidth, rowHeight)
            .fillColor(primary.r, primary.g, primary.b)
            .fill();
@@ -774,19 +775,25 @@ export async function generatePDF({ title, content, theme = 'executivo', options
           });
         });
 
-        // Linhas de dados
+        doc.restore();
+
+        // ===== LINHAS DE DADOS =====
         let rowY = tableY + rowHeight;
-        doc.font('Helvetica').fontSize(9).fillColor(0, 0, 0);
 
         for (let r = 1; r < dataRows.length; r++) {
           // Zebra striping (linhas alternadas)
           if (r % 2 === 0) {
+            doc.save();
             doc.rect(margin, rowY, pageWidth, rowHeight).fillColor(248, 250, 252).fill();
+            doc.restore();
           }
+
+          // IMPORTANTE: sempre resetar cor pra preto ANTES de escrever texto
+          doc.font('Helvetica').fontSize(9).fillColor(0, 0, 0);
 
           const cells = dataRows[r].split('|').slice(1, -1).map(c => c.trim());
           cells.forEach((cell, i) => {
-            doc.fillColor(0, 0, 0).text(cell || '', margin + (i * colWidth) + padding, rowY + 5, {
+            doc.text(cell || '', margin + (i * colWidth) + padding, rowY + 5, {
               width: colWidth - (padding * 2),
               align: i === 0 ? 'left' : 'center',
               ellipsis: true,
@@ -795,20 +802,25 @@ export async function generatePDF({ title, content, theme = 'executivo', options
           });
 
           // Linha horizontal separadora
-          doc.strokeColor(235, 238, 245)
-             .lineWidth(0.5)
+          doc.save();
+          doc.strokeColor(235, 238, 245).lineWidth(0.5)
              .moveTo(margin, rowY + rowHeight)
              .lineTo(margin + pageWidth, rowY + rowHeight)
              .stroke();
+          doc.restore();
 
           rowY += rowHeight;
         }
 
         // Borda externa
-        doc.strokeColor(primary.r, primary.g, primary.b)
-           .lineWidth(1)
+        doc.save();
+        doc.strokeColor(primary.r, primary.g, primary.b).lineWidth(1)
            .rect(margin, tableY, pageWidth, totalHeight)
            .stroke();
+        doc.restore();
+
+        // Reset final das configurações
+        doc.font('Helvetica').fontSize(11).fillColor(0, 0, 0);
 
         y = rowY + 10;
       }
