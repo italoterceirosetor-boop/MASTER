@@ -8,10 +8,43 @@ import { parseGenerationMarkers, generateDOCX, generateXLSX, generateTXT, detect
 
 const router = express.Router();
 
-// URL do serviço Python de PDF (configurado via variável de ambiente)
-const PDF_SERVICE_URL = process.env.PDF_SERVICE_URL || 'http://localhost:8080';
+// URL do serviço Python (Hardcoded como fallback)
+const PDF_SERVICE_PUBLIC = 'https://observant-cooperation-production-2914.up.railway.app';
+const PDF_SERVICE_INTERNAL = process.env.PDF_SERVICE_INTERNAL || 'http://observant-cooperation.railway.internal:8080';
 
-// Detecta se usuário pediu arquivo e qual tipo
+// Função para chamar o serviço Python
+async function generatePDFViaService(title, content, theme, options) {
+  // Tenta primeiro a URL interna (rede privada)
+  const urls = [
+    { url: PDF_SERVICE_INTERNAL, name: 'interna' },
+    { url: PDF_SERVICE_PUBLIC, name: 'pública' }
+  ];
+
+  for (const { url, name } of urls) {
+    try {
+      console.log(`[Master IA] Tentando serviço Python (${name}): ${url}/generate-pdf`);
+      const response = await axios.post(
+        `${url}/generate-pdf`,
+        { title, content, theme, options },
+        {
+          responseType: 'arraybuffer',
+          timeout: 60000,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      console.log(`[Master IA] PDF gerado via ${name}: ${response.data.length} bytes`);
+      return Buffer.from(response.data);
+    } catch (err) {
+      console.error(`[Master IA] Falhou (${name}): ${err.message}`);
+      // Tenta próxima URL
+    }
+  }
+
+  console.error('[Master IA] Nenhuma URL do serviço Python funcionou');
+  return null;
+}
+
+// Detecta tipo de arquivo pedido
 function detectFileRequest(message) {
   const lower = message.toLowerCase();
   if (/\b(pdf|relat[óo]rio)\b/i.test(lower)) return 'pdf';
@@ -21,28 +54,11 @@ function detectFileRequest(message) {
   return null;
 }
 
-// Gera um nome de arquivo baseado no pedido
 function generateFilename(message, type) {
   const stopWords = ['me', 'manda', 'envia', 'gere', 'cria', 'faz', 'um', 'uma', 'sobre', 'do', 'da', 'de', 'o', 'a', 'em', 'para', 'com', 'por', 'que', 'qual'];
   const words = message.toLowerCase().replace(/[^\w\sà-ú]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.includes(w));
   const name = words.slice(0, 4).join('-') || 'documento';
   return `${name}-${Date.now()}`;
-}
-
-// Envia pro serviço Python gerar PDF bonito
-async function generatePDFViaService(title, content, theme, options) {
-  try {
-    console.log(`[Master IA] Chamando serviço Python: ${PDF_SERVICE_URL}`);
-    const response = await axios.post(
-      `${PDF_SERVICE_URL}/generate-pdf`,
-      { title, content, theme, options },
-      { responseType: 'arraybuffer', timeout: 30000 }
-    );
-    return Buffer.from(response.data);
-  } catch (err) {
-    console.error(`[Master IA] Erro no serviço Python:`, err.message);
-    return null;
-  }
 }
 
 router.post('/', authMiddleware, async (req, res) => {
@@ -94,25 +110,28 @@ router.post('/', authMiddleware, async (req, res) => {
     const fileType = detectFileRequest(message);
     const generatedFiles = [];
 
+    // Detecta tema e opções uma vez
+    const detectedTheme = detectTheme(message);
+    const detectedOptions = detectOptions(message);
+
+    // Variável pra controlar se PDF falhou
+    let pdfFailed = false;
+
     // Função para gerar e salvar arquivo
     async function generateAndSave(type, filename, content) {
       try {
         let buffer, mimeType;
         const fullFilename = `${filename}.${type}`;
 
-        // Detecta tema e opções baseado na mensagem do usuário
-        const theme = detectTheme(message);
-        const options = detectOptions(message);
-
         if (type === 'pdf') {
-          // USA O SERVIÇO PYTHON (WeasyPrint)
-          buffer = await generatePDFViaService(filename, content, theme, options);
+          buffer = await generatePDFViaService(filename, content, detectedTheme, detectedOptions);
           if (!buffer) {
-            return res.status(500).json({ error: 'Serviço de PDF indisponível' });
+            pdfFailed = true;
+            return;
           }
           mimeType = 'application/pdf';
         } else if (type === 'docx') {
-          buffer = await generateDOCX({ title: filename, content, theme, options });
+          buffer = await generateDOCX({ title: filename, content, theme: detectedTheme, options: detectedOptions });
           mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         } else if (type === 'xlsx') {
           buffer = await generateXLSX({ title: filename, content });
@@ -152,22 +171,32 @@ router.post('/', authMiddleware, async (req, res) => {
       await generateAndSave(fileType, filename, cleanText);
     }
 
+    // Se o PDF falhou, avisa no final
+    let finalMessage = cleanText;
+    if (pdfFailed) {
+      finalMessage += '\n\n⚠️ _Não consegui gerar o PDF agora. Tente novamente em alguns segundos._';
+    }
+
     // Salva resposta
     await pool.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
-      [convId, 'assistant', cleanText]
+      [convId, 'assistant', finalMessage]
     );
 
     await pool.query('UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [convId]);
 
     res.json({
       conversationId: convId,
-      message: cleanText,
+      message: finalMessage,
       files: generatedFiles
     });
   } catch (err) {
     console.error('Erro no chat:', err);
-    res.status(500).json({ error: 'Erro ao processar mensagem', details: err.message });
+
+    // Só envia erro se ainda não respondeu
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erro ao processar mensagem', details: err.message });
+    }
   }
 });
 
