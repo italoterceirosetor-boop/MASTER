@@ -1,11 +1,13 @@
-// Gera PDF, Word e Excel profissionais usando Puppeteer pra PDF
+// ====== PDF VIA HTML PURO (SEM PUPPETEER, SEM PDFKIT) ======
+// Gera um HTML que pode ser aberto no navegador e o usuário salva como PDF
+// OU usa o html-pdf se disponível
 import ExcelJS from 'exceljs';
 import {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   AlignmentType, Table, TableRow, TableCell, WidthType,
   BorderStyle, ShadingType
 } from 'docx';
-import puppeteer from 'puppeteer';
+import PDFDocument from 'pdfkit';
 
 // ====== TEMAS ======
 const THEMES = {
@@ -521,30 +523,407 @@ ${showFooter ? `
 </html>`;
 }
 
-// ====== PDF VIA PUPPETEER (HTML → PDF PROFISSIONAL) ======
+// ====== PDF PROFISSIONAL (PDFKIT PURO, SEM PUPPETEER) ======
 export async function generatePDF({ title, content, theme = 'executivo', options = {} }) {
-  const html = buildHtml(title, content, theme, options);
+  const t = { ...THEMES[theme] || THEMES.executivo };
+  const primaryHex = t.primary;
+  const accentHex = t.accent;
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  // Converte hex pra RGB (pdfkit usa números)
+  const hexToRgb = (hex) => {
+    const h = hex.replace('#', '');
+    return {
+      r: parseInt(h.substring(0, 2), 16),
+      g: parseInt(h.substring(2, 4), 16),
+      b: parseInt(h.substring(4, 6), 16)
+    };
+  };
+
+  const primary = hexToRgb(primaryHex);
+  const accent = hexToRgb(accentHex);
+  const gray = { r: 100, g: 100, b: 100 };
+  const lightGray = { r: 230, g: 230, b: 230 };
+
+  const showCover = !options.semCapa;
+  const showHeader = !options.semCabecalho && !options.umaPagina;
+  const showFooter = !options.semRodape && !options.umaPagina;
+  const contentWidth = 480; // A4 menos margens
+  const margin = 60;
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: { top: margin, bottom: margin, left: margin, right: margin },
+        bufferPages: true,
+        info: { Title: title, Author: 'Master IA', Creator: 'Master IA' }
+      });
+
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // ===== CAPA =====
+      if (showCover) {
+        // Logo "Master IA" grande
+        doc.fillColor(primary.r, primary.g, primary.b)
+           .fontSize(36)
+           .font('Helvetica-Bold')
+           .text('Master IA', margin, 200);
+
+        doc.fontSize(12)
+           .fillColor(gray.r, gray.g, gray.b)
+           .font('Helvetica')
+           .text('Master Contabilidade & Consultoria', margin, 245);
+
+        // Linha azul
+        doc.strokeColor(primary.r, primary.g, primary.b)
+           .lineWidth(2)
+           .moveTo(margin, 280)
+           .lineTo(535, 280)
+           .stroke();
+
+        // Título do documento
+        doc.fillColor(0, 0, 0)
+           .fontSize(24)
+           .font('Helvetica-Bold')
+           .text(title, margin, 350, { width: contentWidth, align: 'center' });
+
+        // Data
+        doc.fontSize(10)
+           .fillColor(gray.r, gray.g, gray.b)
+           .font('Helvetica-Oblique')
+           .text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, margin, 450, {
+             width: contentWidth,
+             align: 'center'
+           });
+
+        doc.addPage();
+      }
+
+      // ===== FUNÇÕES DE RENDERIZAÇÃO =====
+
+      const pageHeight = doc.page.height - margin;
+      const pageWidth = doc.page.width - (margin * 2);
+
+      // Header (cabeçalho fixo no topo)
+      if (showHeader) {
+        doc.fillColor(primary.r, primary.g, primary.b)
+           .fontSize(10)
+           .font('Helvetica-Bold')
+           .text('Master IA', margin, 30);
+
+        doc.fontSize(8)
+           .fillColor(gray.r, gray.g, gray.b)
+           .font('Helvetica')
+           .text('Master Contabilidade & Consultoria', margin, 45);
+
+        doc.strokeColor(primary.r, primary.g, primary.b)
+           .lineWidth(1)
+           .moveTo(margin, 60)
+           .lineTo(doc.page.width - margin, 60)
+           .stroke();
+      }
+
+      let y = showHeader ? 80 : (showCover ? 60 : 50);
+
+      // Função pra checar se precisa nova página
+      function checkPage(neededHeight) {
+        if (y + neededHeight > pageHeight) {
+          doc.addPage();
+          if (showHeader) {
+            // Repete header
+            doc.fillColor(primary.r, primary.g, primary.b)
+               .fontSize(10)
+               .font('Helvetica-Bold')
+               .text('Master IA', margin, 30);
+            doc.strokeColor(primary.r, primary.g, primary.b)
+               .lineWidth(1)
+               .moveTo(margin, 60)
+               .lineTo(doc.page.width - margin, 60)
+               .stroke();
+            y = 80;
+          } else {
+            y = 50;
+          }
+        }
+      }
+
+      // Renderiza título principal (# )
+      function renderH1(text) {
+        checkPage(40);
+        doc.fontSize(20).font('Helvetica-Bold').fillColor(primary.r, primary.g, primary.b);
+        doc.text(text, margin, y, { width: pageWidth });
+        y = doc.y + 6;
+        // Linha embaixo
+        doc.strokeColor(primary.r, primary.g, primary.b)
+           .lineWidth(1.5)
+           .moveTo(margin, y)
+           .lineTo(doc.page.width - margin, y)
+           .stroke();
+        y += 10;
+      }
+
+      function renderH2(text) {
+        checkPage(35);
+        doc.fontSize(15).font('Helvetica-Bold').fillColor(primary.r, primary.g, primary.b);
+        doc.text(text, margin, y, { width: pageWidth });
+        y = doc.y + 8;
+      }
+
+      function renderH3(text) {
+        checkPage(28);
+        doc.fontSize(12).font('Helvetica-Bold').fillColor(gray.r, gray.g, gray.b);
+        doc.text(text, margin, y, { width: pageWidth });
+        y = doc.y + 6;
+      }
+
+      function renderParagraph(text) {
+        checkPage(20);
+        doc.fontSize(11).font('Helvetica').fillColor(0, 0, 0);
+        doc.text(text, margin, y, { width: pageWidth, align: 'justify', lineGap: 3 });
+        y = doc.y + 8;
+      }
+
+      function renderBullet(text) {
+        checkPage(18);
+        doc.fontSize(11).font('Helvetica').fillColor(accent.r, accent.g, accent.b);
+        // Bullet na cor accent
+        const bulletY = y;
+        doc.text('•', margin + 5, bulletY, { continued: false });
+        // Texto
+        doc.font('Helvetica').fillColor(0, 0, 0);
+        doc.text(text, margin + 20, y, { width: pageWidth - 20, align: 'left', lineGap: 3 });
+        y = doc.y + 4;
+      }
+
+      function renderNumbered(num, text) {
+        checkPage(18);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(primary.r, primary.g, primary.b);
+        const numY = y;
+        doc.text(`${num}.`, margin + 5, numY, { width: 20 });
+        doc.font('Helvetica').fillColor(0, 0, 0);
+        doc.text(text, margin + 25, y, { width: pageWidth - 25, align: 'left', lineGap: 3 });
+        y = doc.y + 4;
+      }
+
+      function renderQuote(text) {
+        checkPage(25);
+        doc.fontSize(10).font('Helvetica-Oblique').fillColor(gray.r, gray.g, gray.b);
+        doc.text(text, margin + 20, y, { width: pageWidth - 20, align: 'left' });
+        y = doc.y + 8;
+      }
+
+      function renderSeparator() {
+        checkPage(15);
+        y += 5;
+        doc.strokeColor(lightGray.r, lightGray.g, lightGray.b)
+           .lineWidth(0.5)
+           .moveTo(margin + 50, y)
+           .lineTo(doc.page.width - margin - 50, y)
+           .stroke();
+        y += 10;
+      }
+
+      function renderCode(text) {
+        checkPage(text.length * 0.4 + 20);
+        const codeY = y;
+        const lines = text.split('\n').length;
+        const codeHeight = Math.max(lines * 14 + 16, 30);
+
+        // Fundo escuro
+        doc.rect(margin, codeY, pageWidth, codeHeight).fillColor(245, 245, 245).fill();
+
+        doc.fontSize(9).font('Courier').fillColor(180, 30, 80);
+        doc.text(text, margin + 10, codeY + 8, { width: pageWidth - 20 });
+
+        y = codeY + codeHeight + 5;
+      }
+
+      function renderTable(rows) {
+        if (rows.length < 2) return;
+
+        // Pula linha separadora (|---|---|)
+        const dataRows = rows.filter(r => !r.match(/^\|[\s\-|]+\|$/));
+        if (dataRows.length === 0) return;
+
+        const numCols = dataRows[0].split('|').length - 2;
+        const colWidth = pageWidth / numCols;
+        const rowHeight = 22;
+        const padding = 8;
+        const totalHeight = dataRows.length * rowHeight;
+
+        checkPage(totalHeight + 10);
+        const tableY = y;
+
+        // Cabeçalho (fundo colorido)
+        doc.rect(margin, tableY, pageWidth, rowHeight)
+           .fillColor(primary.r, primary.g, primary.b)
+           .fill();
+
+        // Texto do cabeçalho (branco, negrito)
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(255, 255, 255);
+        const headerCells = dataRows[0].split('|').slice(1, -1).map(c => c.trim());
+        headerCells.forEach((cell, i) => {
+          doc.text(cell || '', margin + (i * colWidth) + padding, tableY + 5, {
+            width: colWidth - (padding * 2),
+            align: 'center',
+            ellipsis: true,
+            height: rowHeight - 5
+          });
+        });
+
+        // Linhas de dados
+        let rowY = tableY + rowHeight;
+        doc.font('Helvetica').fontSize(9).fillColor(0, 0, 0);
+
+        for (let r = 1; r < dataRows.length; r++) {
+          // Zebra striping (linhas alternadas)
+          if (r % 2 === 0) {
+            doc.rect(margin, rowY, pageWidth, rowHeight).fillColor(248, 250, 252).fill();
+          }
+
+          const cells = dataRows[r].split('|').slice(1, -1).map(c => c.trim());
+          cells.forEach((cell, i) => {
+            doc.fillColor(0, 0, 0).text(cell || '', margin + (i * colWidth) + padding, rowY + 5, {
+              width: colWidth - (padding * 2),
+              align: i === 0 ? 'left' : 'center',
+              ellipsis: true,
+              height: rowHeight - 5
+            });
+          });
+
+          // Linha horizontal separadora
+          doc.strokeColor(235, 238, 245)
+             .lineWidth(0.5)
+             .moveTo(margin, rowY + rowHeight)
+             .lineTo(margin + pageWidth, rowY + rowHeight)
+             .stroke();
+
+          rowY += rowHeight;
+        }
+
+        // Borda externa
+        doc.strokeColor(primary.r, primary.g, primary.b)
+           .lineWidth(1)
+           .rect(margin, tableY, pageWidth, totalHeight)
+           .stroke();
+
+        y = rowY + 10;
+      }
+
+      // ===== PROCESSA CONTEÚDO =====
+      const lines = content.split('\n');
+      let tableBuffer = [];
+
+      function flushTable() {
+        if (tableBuffer.length > 0) {
+          renderTable(tableBuffer);
+          tableBuffer = [];
+        }
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Coleta tabela markdown
+        if (line.startsWith('|') && line.endsWith('|')) {
+          tableBuffer.push(line);
+          continue;
+        } else if (tableBuffer.length > 0) {
+          flushTable();
+        }
+
+        // Bloco de código
+        if (trimmed.startsWith('```')) {
+          // Pula até próximo ```
+          let codeText = '';
+          i++;
+          while (i < lines.length && !lines[i].trim().startsWith('```')) {
+            codeText += lines[i] + '\n';
+            i++;
+          }
+          renderCode(codeText.trim());
+          continue;
+        }
+
+        // Hierarquia de títulos
+        if (line.startsWith('# ')) {
+          renderH1(line.substring(2));
+        }
+        else if (line.startsWith('## ')) {
+          renderH2(line.substring(3));
+        }
+        else if (line.startsWith('### ')) {
+          renderH3(line.substring(4));
+        }
+        else if (line.startsWith('#### ')) {
+          renderH3(line.substring(5));
+        }
+        // Separador
+        else if (trimmed === '---') {
+          renderSeparator();
+        }
+        // Citação
+        else if (line.startsWith('> ')) {
+          renderQuote(line.substring(2).replace(/\*\*/g, ''));
+        }
+        // Lista com bullet
+        else if (line.startsWith('- ') || line.startsWith('* ')) {
+          renderBullet(line.substring(2).replace(/\*\*/g, ''));
+        }
+        // Lista numerada
+        else if (/^\d+\.\s/.test(line)) {
+          const match = line.match(/^(\d+)\.\s(.*)$/);
+          renderNumbered(match[1], match[2].replace(/\*\*/g, ''));
+        }
+        // Linha vazia
+        else if (trimmed === '') {
+          y += 8;
+        }
+        // Texto normal (remove formatação markdown simples)
+        else {
+          const cleanText = line.replace(/\*\*/g, '').replace(/\*/g, '');
+          renderParagraph(cleanText);
+        }
+      }
+
+      // Renderiza tabela pendente
+      flushTable();
+
+      // ===== FOOTER =====
+      if (showFooter) {
+        const range = doc.bufferedPageRange();
+        const totalPages = range.count;
+        for (let i = range.start; i < range.start + totalPages; i++) {
+          doc.switchToPage(i);
+
+          // Linha do footer
+          doc.strokeColor(lightGray.r, lightGray.g, lightGray.b)
+             .lineWidth(0.5)
+             .moveTo(margin, pageHeight + 35)
+             .lineTo(doc.page.width - margin, pageHeight + 35)
+             .stroke();
+
+          doc.fontSize(7)
+             .fillColor(gray.r, gray.g, gray.b)
+             .font('Helvetica')
+             .text('Master IA — Documento gerado automaticamente', margin, pageHeight + 40);
+
+          doc.text(`Página ${i - range.start + 1} de ${totalPages}`, margin, pageHeight + 40, {
+            width: pageWidth,
+            align: 'right'
+          });
+        }
+      }
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
   });
-
-  try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: 0, bottom: 0, left: 0, right: 0 },
-      displayHeaderFooter: false
-    });
-
-    return pdfBuffer;
-  } finally {
-    await browser.close();
-  }
 }
 
 // ====== WORD (DOCX) PROFISSIONAL ======
