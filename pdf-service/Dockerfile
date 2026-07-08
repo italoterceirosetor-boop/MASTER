@@ -40,5 +40,5 @@ ENV PDFKIT_BIN=/usr/bin/chromium
 
 EXPOSE 8080
 
-# Inicia Xvfb (display virtual) + gunicorn
-CMD xvfb-run -a --server-args="-screen 0 1024x768x24" gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+# Inicia Xvfb (display virtual) + gunicorn (timeout alto pro PDF demorar)
+CMD xvfb-run -a --server-args="-screen 0 1024x768x24" gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --keep-alive 2
