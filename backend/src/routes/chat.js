@@ -1,17 +1,20 @@
 // Rotas de chat - envio de mensagens com IA
 import express from 'express';
+import axios from 'axios';
 import { pool } from '../db/pool.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { chatWithAI } from '../services/chatService.js';
-import { parseGenerationMarkers, generatePDF, generateDOCX, generateXLSX, generateTXT, detectTheme, detectOptions } from '../services/generatorService.js';
+import { parseGenerationMarkers, generateDOCX, generateXLSX, generateTXT, detectTheme, detectOptions } from '../services/generatorService.js';
 
 const router = express.Router();
+
+// URL do serviço Python de PDF (configurado via variável de ambiente)
+const PDF_SERVICE_URL = process.env.PDF_SERVICE_URL || 'http://localhost:8080';
 
 // Detecta se usuário pediu arquivo e qual tipo
 function detectFileRequest(message) {
   const lower = message.toLowerCase();
-  // Ordem importa: PDF/Word/Excel/TXT específicos
-  if (/\b(pdf|relat[óo]rio|pdf)\b/i.test(lower)) return 'pdf';
+  if (/\b(pdf|relat[óo]rio)\b/i.test(lower)) return 'pdf';
   if (/\b(word|docx|documento)\b/i.test(lower)) return 'docx';
   if (/\b(excel|planilha|xlsx|spreadsheet)\b/i.test(lower)) return 'xlsx';
   if (/\b(txt|texto|bloco de notas)\b/i.test(lower)) return 'txt';
@@ -26,7 +29,22 @@ function generateFilename(message, type) {
   return `${name}-${Date.now()}`;
 }
 
-// Enviar mensagem e receber resposta
+// Envia pro serviço Python gerar PDF bonito
+async function generatePDFViaService(title, content, theme, options) {
+  try {
+    console.log(`[Master IA] Chamando serviço Python: ${PDF_SERVICE_URL}`);
+    const response = await axios.post(
+      `${PDF_SERVICE_URL}/generate-pdf`,
+      { title, content, theme, options },
+      { responseType: 'arraybuffer', timeout: 30000 }
+    );
+    return Buffer.from(response.data);
+  } catch (err) {
+    console.error(`[Master IA] Erro no serviço Python:`, err.message);
+    return null;
+  }
+}
+
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { conversationId, message } = req.body;
@@ -71,27 +89,27 @@ router.post('/', authMiddleware, async (req, res) => {
     // Chama IA
     const aiResponse = await chatWithAI(messages, message);
 
-    // Detecta marcadores de geração de arquivos
+    // Detecta marcadores de geração
     const { cleanText, markers } = parseGenerationMarkers(aiResponse);
-
-    // Detecta pedido de arquivo pela mensagem do usuário (fallback)
     const fileType = detectFileRequest(message);
     const generatedFiles = [];
 
-    // Função auxiliar pra gerar e salvar arquivo
+    // Função para gerar e salvar arquivo
     async function generateAndSave(type, filename, content) {
       try {
         let buffer, mimeType;
         const fullFilename = `${filename}.${type}`;
 
-        // Detecta tema e opções baseado na mensagem original
+        // Detecta tema e opções baseado na mensagem do usuário
         const theme = detectTheme(message);
         const options = detectOptions(message);
 
-        console.log(`[Master IA] Gerando ${type}: "${fullFilename}", tema=${theme}, opcoes=${JSON.stringify(options)}`);
-
         if (type === 'pdf') {
-          buffer = await generatePDF({ title: filename, content, theme, options });
+          // USA O SERVIÇO PYTHON (WeasyPrint)
+          buffer = await generatePDFViaService(filename, content, theme, options);
+          if (!buffer) {
+            return res.status(500).json({ error: 'Serviço de PDF indisponível' });
+          }
           mimeType = 'application/pdf';
         } else if (type === 'docx') {
           buffer = await generateDOCX({ title: filename, content, theme, options });
@@ -123,19 +141,18 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
-    // 1. SEMPRE processa marcadores primeiro (eles têm prioridade)
+    // 1. Processa marcadores da IA
     for (const marker of markers) {
       await generateAndSave(marker.type, marker.filename, marker.content);
     }
 
-    // 2. Fallback: se usuário pediu arquivo mas IA não usou marcador,
-    //    gera usando a resposta completa dela (que pode ter markdown)
+    // 2. Fallback: detecta pedido do usuário
     if (markers.length === 0 && fileType) {
       const filename = generateFilename(message, fileType);
       await generateAndSave(fileType, filename, cleanText);
     }
 
-    // Salva resposta (sem os marcadores)
+    // Salva resposta
     await pool.query(
       'INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)',
       [convId, 'assistant', cleanText]
