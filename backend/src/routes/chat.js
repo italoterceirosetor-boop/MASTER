@@ -88,6 +88,8 @@ router.post('/', authMiddleware, async (req, res) => {
         const theme = detectTheme(message);
         const options = detectOptions(message);
 
+        console.log(`[Master IA] Gerando ${type}: "${fullFilename}", tema=${theme}, opcoes=${JSON.stringify(options)}`);
+
         if (type === 'pdf') {
           buffer = await generatePDF({ title: filename, content, theme, options });
           mimeType = 'application/pdf';
