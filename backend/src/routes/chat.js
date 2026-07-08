@@ -28,7 +28,7 @@ async function generatePDFViaService(title, content, theme, options) {
         { title, content, theme, options },
         {
           responseType: 'arraybuffer',
-          timeout: 60000,
+          timeout: 180000,  // 3 minutos (PDFs podem demorar)
           headers: { 'Content-Type': 'application/json' }
         }
       );
@@ -36,7 +36,6 @@ async function generatePDFViaService(title, content, theme, options) {
       return Buffer.from(response.data);
     } catch (err) {
       console.error(`[Master IA] Falhou (${name}): ${err.message}`);
-      // Tenta próxima URL
     }
   }
 
