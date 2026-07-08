@@ -54,7 +54,7 @@ def _md2rl(text):
     text = re.sub(r'`([^`]+)`', r'<font name="Courier" size="8.5" color="#06b6d4">\1</font>', text)
     text = text.replace('`', '')
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-    return text
+    return text 
 
 def _parse_md(content):
     """Parser de markdown → lista de blocos estruturados."""
