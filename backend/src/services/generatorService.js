@@ -603,8 +603,7 @@ async function generatePDFWithPdfKit({ title, content, theme = 'executivo', opti
   const showHeader = !options.semCabecalho;
   const showFooter = !options.semRodape;
   const margin = 50;
-  const pageWidth = doc.page.width - (margin * 2);
-  const pageHeight = doc.page.height - margin;
+  // pageWidth e pageHeight definidos depois que doc é criado
 
   return new Promise((resolve, reject) => {
     try {
@@ -614,6 +613,9 @@ async function generatePDFWithPdfKit({ title, content, theme = 'executivo', opti
         bufferPages: true,
         info: { Title: title, Author: 'Master IA', Creator: 'Master IA' }
       });
+
+      const pageWidth = doc.page.width - (margin * 2);
+      const pageHeight = doc.page.height - margin;
 
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
