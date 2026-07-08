@@ -42,6 +42,51 @@ app.get('/api/debug/detect', (req, res) => {
   });
 });
 
+// Debug: gera um PDF de teste pra verificar se tá funcionando
+app.get('/api/debug/test-pdf', async (req, res) => {
+  try {
+    const { generatePDF } = await import('./services/generatorService.js');
+    const buffer = await generatePDF({
+      title: 'Teste de PDF',
+      content: `# Teste de Renderização
+
+## Subtítulo teste
+
+Este é um parágrafo de teste com **negrito** e *itálico*.
+
+### Lista de teste:
+
+- Item 1
+- Item 2
+- Item 3
+
+### Tabela teste:
+
+| Coluna A | Coluna B |
+|----------|----------|
+| Dado 1 | Dado 2 |
+| Dado 3 | Dado 4 |
+
+> Citação de teste aqui.
+
+---
+
+Mais texto após o separador.
+
+Final do documento.`,
+      theme: 'verde',
+      options: { semCapa: true, semCabecalho: true, umaPagina: true }
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="teste.pdf"');
+    res.send(buffer);
+  } catch (err) {
+    console.error('Erro ao gerar PDF de teste:', err);
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 // Inicializa banco e sobe servidor
 initDatabase()
   .then(() => {
