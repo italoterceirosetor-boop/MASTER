@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js';
 import chatRoutes from './routes/chat.js';
 import conversationsRoutes from './routes/conversations.js';
 import uploadRoutes from './routes/upload.js';
+import { detectTheme, detectOptions } from './services/generatorService.js';
 import { initDatabase } from './db/init.js';
 
 dotenv.config();
@@ -29,6 +30,16 @@ app.use('/api/upload', uploadRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'Master IA Backend', timestamp: new Date().toISOString() });
+});
+
+// Debug: detecta tema/opções de uma mensagem (sem precisar auth)
+app.get('/api/debug/detect', (req, res) => {
+  const message = req.query.q || '';
+  res.json({
+    message,
+    theme: detectTheme(message),
+    options: detectOptions(message)
+  });
 });
 
 // Inicializa banco e sobe servidor
