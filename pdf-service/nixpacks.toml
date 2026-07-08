@@ -1,11 +1,20 @@
 # Configuração do Nixpacks pro Railway
-# Garante que WeasyPrint tem as dependências de sistema
-aptackages = [
-    "libpango-1.0-0",
-    "libpangoft2-1.0-0",
-    "libcairo2",
-    "libcairo-gobject2",
-    "libgdk-pixbuf2.0-0",
-    "libffi-dev",
-    "shared-mime-info"
+# Instala dependências do sistema necessárias pro WeasyPrint funcionar
+
+[phases.setup]
+aptPackages = [
+  "libpango-1.0-0",
+  "libpangoft2-1.0-0",
+  "libcairo2",
+  "libcairo-gobject2",
+  "libgdk-pixbuf-2.0-0",
+  "libffi-dev",
+  "shared-mime-info",
+  "libgobject-2.0-0",
+  "libglib2.0-0",
+  "libxml2-dev",
+  "libxslt1-dev",
+  "libpangocairo-1.0-0",
+  "fonts-liberation",
+  "fonts-dejavu-core"
 ]
