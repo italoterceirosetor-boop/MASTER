@@ -569,11 +569,10 @@ async function generatePDFWithMdToPdf({ title, content, theme, options }) {
         displayHeaderFooter: showHeader || showFooter,
         headerTemplate: showHeader ? `<div style="font-size: 9px; color: ${t.primary}; width: 100%; padding: 0 40px; border-bottom: 2px solid ${t.primary}; padding-bottom: 5px;"><strong>Master IA</strong> <span style="color: #888;">— Master Contabilidade & Consultoria</span></div>` : '<div></div>',
         footerTemplate: showFooter ? `<div style="font-size: 8px; color: #888; width: 100%; padding: 0 40px; text-align: center;">Master IA — Documento gerado automaticamente — Página <span class="pageNumber"></span> de <span class="totalPages"></span></div>` : '<div></div>'
-        },
-        stylesheet_encoding: 'utf-8',
-        highlight_style: 'github-dark',
-        body_class: 'master-ia-pdf'
-      }
+      },
+      stylesheet_encoding: 'utf-8',
+      highlight_style: 'github-dark',
+      body_class: 'master-ia-pdf'
     }
   );
 
