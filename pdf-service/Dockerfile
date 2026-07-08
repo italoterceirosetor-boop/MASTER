@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libcairo2 \
     xvfb \
+    xauth \
     libdbus-1-3 \
     libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
