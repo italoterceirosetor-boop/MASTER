@@ -260,7 +260,10 @@ def generate_pdf():
             'margin-bottom': '20mm',
             'margin-left': '20mm',
             'encoding': 'UTF-8',
-            'quiet': ''
+            'quiet': '',
+            'no-sandbox': None,        # Necessário pra rodar como root no Docker
+            'disable-gpu': None,        # Não usa GPU no container
+            'disable-dev-shm-usage': None  # Evita problemas com /dev/shm
         }
 
         if PDFKIT_CONFIG:
